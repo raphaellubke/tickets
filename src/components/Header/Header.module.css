@@ -1,0 +1,143 @@
+.header {
+    background-color: rgba(255, 255, 255, 0.85);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-bottom: 1px solid rgba(229, 231, 235, 0.5);
+    padding: var(--spacing-md) 0;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    width: 100%;
+    box-shadow: 0 4px 30px rgba(0, 0, 0, 0.03);
+}
+
+.container {
+    max-width: 1560px;
+    margin: 0 auto;
+    padding: 0 var(--spacing-md);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--spacing-lg);
+}
+
+.logo {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+    font-weight: 800;
+    font-size: 1.5rem;
+    color: var(--text-color);
+    letter-spacing: -0.02em;
+}
+
+.logoIcon {
+    font-size: 1.75rem;
+}
+
+.locationSelector {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+    background-color: rgba(243, 244, 246, 0.5);
+    padding: var(--spacing-sm) var(--spacing-md);
+    border-radius: var(--radius-full);
+    border: 1px solid transparent;
+    transition: all 0.2s;
+    cursor: pointer;
+}
+
+.locationSelector:hover {
+    background-color: rgba(243, 244, 246, 0.8);
+    border-color: var(--border-color);
+}
+
+.locationSelect {
+    border: none;
+    background: transparent;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--text-color);
+    outline: none;
+    cursor: pointer;
+}
+
+.searchContainer {
+    flex: 1;
+    max-width: 600px;
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.searchInput {
+    width: 100%;
+    padding: 0.75rem var(--spacing-md);
+    padding-right: 3rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-full);
+    background-color: rgba(249, 250, 251, 0.8);
+    font-size: 0.95rem;
+    outline: none;
+    transition: all 0.2s;
+    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.02);
+}
+
+.searchInput:focus {
+    border-color: var(--primary-color);
+    background-color: var(--white);
+    box-shadow: 0 0 0 3px rgba(217, 119, 6, 0.1);
+}
+
+.searchButton {
+    position: absolute;
+    right: var(--spacing-md);
+    background: none;
+    border: none;
+    color: var(--text-light);
+    font-size: 1.1rem;
+    cursor: pointer;
+    transition: color 0.2s;
+}
+
+.searchButton:hover {
+    color: var(--primary-color);
+}
+
+.actions {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-xl);
+}
+
+.createEvent {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--text-color);
+    transition: color 0.2s;
+}
+
+.createEvent:hover {
+    color: var(--primary-color);
+}
+
+.loginButton {
+    padding: 0.6rem 1.5rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-full);
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--text-color);
+    background-color: var(--white);
+    transition: all 0.2s;
+    box-shadow: var(--shadow-sm);
+}
+
+.loginButton:hover {
+    border-color: var(--text-color);
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-md);
+}

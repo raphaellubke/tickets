@@ -1,0 +1,111 @@
+.section {
+    max-width: 1560px;
+    margin: 0 auto;
+    padding: var(--spacing-xl) var(--spacing-md);
+    width: 100%;
+}
+
+.header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    margin-bottom: var(--spacing-xl);
+    padding-bottom: var(--spacing-sm);
+    border-bottom: 1px solid var(--border-color);
+}
+
+.title {
+    font-size: 2rem;
+    font-weight: 800;
+    color: var(--text-color);
+    letter-spacing: -0.02em;
+}
+
+.viewAll {
+    color: var(--primary-color);
+    font-weight: 600;
+    font-size: 0.95rem;
+    transition: all 0.2s;
+    text-decoration: none;
+    padding: 4px 8px;
+    border-radius: var(--radius-md);
+}
+
+.viewAll:hover {
+    background-color: rgba(217, 119, 6, 0.1);
+    transform: translateX(4px);
+}
+
+.grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: var(--spacing-lg);
+}
+
+.card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--spacing-md);
+    padding: var(--spacing-lg);
+    background-color: var(--white);
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border-color);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    cursor: pointer;
+    text-align: center;
+}
+
+.card:hover {
+    transform: translateY(-8px);
+    box-shadow: var(--shadow-md);
+    border-color: var(--primary-color);
+}
+
+.iconContainer {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2.5rem;
+    background: linear-gradient(135deg, #f3f4f6, #e5e7eb);
+    /* Default fallback */
+    transition: transform 0.3s ease;
+}
+
+.card:hover .iconContainer {
+    transform: scale(1.1) rotate(5deg);
+}
+
+.name {
+    font-weight: 700;
+    font-size: 1.1rem;
+    color: var(--text-color);
+}
+
+/* Gradient classes matching the component props */
+.from-purple-500.to-indigo-500 {
+    background: linear-gradient(135deg, #d8b4fe, #818cf8);
+}
+
+.from-blue-500.to-cyan-500 {
+    background: linear-gradient(135deg, #93c5fd, #67e8f9);
+}
+
+.from-emerald-500.to-teal-500 {
+    background: linear-gradient(135deg, #6ee7b7, #5eead4);
+}
+
+.from-orange-500.to-amber-500 {
+    background: linear-gradient(135deg, #fdba74, #fcd34d);
+}
+
+.from-pink-500.to-rose-500 {
+    background: linear-gradient(135deg, #f9a8d4, #fda4af);
+}
+
+.from-red-500.to-pink-500 {
+    background: linear-gradient(135deg, #fca5a5, #f9a8d4);
+}

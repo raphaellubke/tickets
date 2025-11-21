@@ -1,0 +1,86 @@
+.section {
+    max-width: 1560px;
+    margin: 0;
+    padding: 10px 0;
+    width: 100%;
+}
+
+.header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    margin-bottom: 0;
+    padding-bottom: var(--spacing-md);
+    border-bottom: 1px solid var(--border-color);
+}
+
+.title {
+    font-size: 2.25rem;
+    font-weight: 700;
+    color: var(--text-color);
+    letter-spacing: -0.03em;
+}
+
+.viewAll {
+    color: var(--primary-color);
+    font-weight: 600;
+    font-size: 0.95rem;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 8px;
+    border-radius: var(--radius-md);
+}
+
+.viewAll:hover {
+    background-color: rgba(74, 144, 226, 0.1);
+    transform: translateX(4px);
+}
+
+.grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 2rem;
+}
+
+/* Staggered fade-in for cards */
+.grid>* {
+    animation: fadeInUp 0.5s ease-out backwards;
+}
+
+.grid>*:nth-child(1) {
+    animation-delay: 0.1s;
+}
+
+.grid>*:nth-child(2) {
+    animation-delay: 0.2s;
+}
+
+.grid>*:nth-child(3) {
+    animation-delay: 0.3s;
+}
+
+.grid>*:nth-child(4) {
+    animation-delay: 0.4s;
+}
+
+.grid>*:nth-child(5) {
+    animation-delay: 0.5s;
+}
+
+.grid>*:nth-child(6) {
+    animation-delay: 0.6s;
+}
+
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}

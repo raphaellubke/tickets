@@ -1,0 +1,332 @@
+.hero {
+    position: relative;
+    height: 600px;
+    width: 100%;
+    margin: 0;
+    padding: 10px 0;
+    border-radius: 32px;
+    overflow: hidden;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+}
+
+.mainSlide {
+    position: relative;
+    width: 100%;
+    height: 100%;
+}
+
+.slideBackground {
+    position: absolute;
+    inset: 0;
+    background-size: cover;
+    background-position: center;
+    opacity: 0;
+    transform: scale(1.1);
+    transition: opacity 0.8s cubic-bezier(0.4, 0, 0.2, 1),
+        transform 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.activeSlide {
+    opacity: 1;
+    transform: scale(1);
+}
+
+.overlay {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(to right,
+            rgba(15, 23, 42, 0.95) 0%,
+            rgba(15, 23, 42, 0.7) 40%,
+            rgba(15, 23, 42, 0.3) 70%,
+            transparent 100%);
+    z-index: 2;
+}
+
+.content {
+    position: relative;
+    z-index: 3;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 4rem;
+    gap: 4rem;
+}
+
+.mainContent {
+    flex: 1;
+    max-width: 650px;
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+}
+
+.tag {
+    display: inline-flex;
+    align-items: center;
+    width: fit-content;
+    padding: 8px 20px;
+    border-radius: 100px;
+    font-size: 0.875rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--white);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    animation: fadeInUp 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.title {
+    font-size: 4.5rem;
+    font-weight: 900;
+    line-height: 1;
+    letter-spacing: -0.04em;
+    color: var(--white);
+    text-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+    animation: fadeInUp 0.6s cubic-bezier(0.4, 0, 0.2, 1) 0.1s backwards;
+}
+
+.details {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+    animation: fadeInUp 0.6s cubic-bezier(0.4, 0, 0.2, 1) 0.2s backwards;
+}
+
+.detailItem {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: #e2e8f0;
+}
+
+.icon {
+    font-size: 1.5rem;
+}
+
+.ctaButton {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    width: fit-content;
+    padding: 1rem 2rem;
+    background: var(--primary-color);
+    color: var(--white);
+    border-radius: 12px;
+    font-size: 1rem;
+    font-weight: 600;
+    text-decoration: none;
+    box-shadow: 0 4px 14px 0 rgba(74, 144, 226, 0.4);
+    transition: all 0.3s ease;
+    animation: fadeInUp 0.6s cubic-bezier(0.4, 0, 0.2, 1) 0.3s backwards;
+    border: none;
+}
+
+.ctaButton:hover {
+    background: var(--primary-hover);
+    box-shadow: 0 6px 20px 0 rgba(74, 144, 226, 0.5);
+    transform: translateY(-2px);
+}
+
+.ctaButton:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 8px 0 rgba(74, 144, 226, 0.3);
+}
+
+.ctaButton svg {
+    transition: transform 0.3s ease;
+}
+
+.ctaButton:hover svg {
+    transform: translateX(4px);
+}
+
+.nextPreview {
+    width: 380px;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    animation: fadeInRight 0.6s cubic-bezier(0.4, 0, 0.2, 1) 0.4s backwards;
+}
+
+.previewLabel {
+    font-size: 0.875rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: rgba(255, 255, 255, 0.6);
+    padding-left: 0.5rem;
+}
+
+.previewCard {
+    position: relative;
+    height: 280px;
+    border-radius: 24px;
+    overflow: hidden;
+    background-size: cover;
+    background-position: center;
+    cursor: pointer;
+    border: 2px solid rgba(255, 255, 255, 0.15);
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.previewCard:hover {
+    transform: translateY(-8px) scale(1.02);
+    border-color: rgba(255, 255, 255, 0.4);
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+}
+
+.previewOverlay {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(to top,
+            rgba(0, 0, 0, 0.9) 0%,
+            rgba(0, 0, 0, 0.4) 50%,
+            transparent 100%);
+}
+
+.previewContent {
+    position: relative;
+    z-index: 2;
+    height: 100%;
+    padding: 2rem;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    gap: 1rem;
+}
+
+.previewTag {
+    display: inline-flex;
+    width: fit-content;
+    padding: 6px 14px;
+    border-radius: 100px;
+    font-size: 0.75rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--white);
+}
+
+.previewTitle {
+    font-size: 1.5rem;
+    font-weight: 800;
+    color: var(--white);
+    line-height: 1.2;
+}
+
+/* Navigation buttons hidden */
+.controls {
+    display: none;
+}
+
+.navButton {
+    display: none;
+}
+
+.indicators {
+    position: absolute;
+    bottom: 2.5rem;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 10;
+    display: flex;
+    gap: 0.75rem;
+}
+
+.indicator {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.3);
+    border: none;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    padding: 0;
+}
+
+.indicator:hover {
+    background: rgba(255, 255, 255, 0.6);
+    transform: scale(1.2);
+}
+
+.activeIndicator {
+    background: var(--white);
+    width: 32px;
+    border-radius: 6px;
+}
+
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(30px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes fadeInRight {
+    from {
+        opacity: 0;
+        transform: translateX(30px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+@media (max-width: 1200px) {
+    .content {
+        padding: 0 3rem;
+        gap: 2rem;
+    }
+
+    .nextPreview {
+        width: 300px;
+    }
+
+    .title {
+        font-size: 3.5rem;
+    }
+}
+
+@media (max-width: 1024px) {
+    .nextPreview {
+        display: none;
+    }
+
+    .mainContent {
+        max-width: 100%;
+    }
+
+    .title {
+        font-size: 3rem;
+    }
+}
+
+@media (max-width: 640px) {
+    .hero {
+        height: 550px;
+        border-radius: 24px;
+    }
+
+    .content {
+        padding: 0 2rem;
+    }
+
+    .title {
+        font-size: 2.5rem;
+    }
+
+    .indicators {
+        bottom: 2rem;
+    }
+}
