@@ -109,19 +109,24 @@ export default function Hero() {
                     {/* Next Slide Preview */}
                     <div className={styles.nextPreview}>
                         <div className={styles.previewLabel}>Próximo</div>
-                        <div
-                            className={styles.previewCard}
-                            onClick={() => goToSlide(nextIndex)}
-                            style={{ backgroundImage: `url(${next.image})` }}
-                        >
-                            <div className={styles.previewOverlay} />
-                            <div className={styles.previewContent}>
-                                <span className={styles.previewTag} style={{ backgroundColor: next.tagColor }}>
-                                    {next.tag}
-                                </span>
-                                <h3 className={styles.previewTitle}>{next.title}</h3>
+                        <Link href={`/event/${next.id}`} className={styles.previewCardLink}>
+                            <div
+                                className={styles.previewCard}
+                                onClick={(e) => {
+                                    e.preventDefault();
+                                    goToSlide(nextIndex);
+                                }}
+                                style={{ backgroundImage: `url(${next.image})` }}
+                            >
+                                <div className={styles.previewOverlay} />
+                                <div className={styles.previewContent}>
+                                    <span className={styles.previewTag} style={{ backgroundColor: next.tagColor }}>
+                                        {next.tag}
+                                    </span>
+                                    <h3 className={styles.previewTitle}>{next.title}</h3>
+                                </div>
                             </div>
-                        </div>
+                        </Link>
                     </div>
                 </div>
             </div>

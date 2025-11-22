@@ -162,6 +162,11 @@
     padding-left: 0.5rem;
 }
 
+.previewCardLink {
+    text-decoration: none;
+    display: block;
+}
+
 .previewCard {
     position: relative;
     height: 280px;

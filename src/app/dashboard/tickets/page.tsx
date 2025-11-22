@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/context/AuthContext';
+import DropdownMenu from '@/components/DropdownMenu/DropdownMenu';
 import styles from './page.module.css';
 
 interface Ticket {
@@ -36,6 +37,11 @@ export default function TicketsPage() {
     const [selectedStatus, setSelectedStatus] = useState('all');
     const [events, setEvents] = useState<any[]>([]);
     const supabase = createClient();
+
+    // Function to update tickets state (needed for dropdown)
+    const updateTicketStatus = (ticketId: string, newStatus: string) => {
+        setTickets(tickets.map(t => t.id === ticketId ? { ...t, status: newStatus } : t));
+    };
 
     useEffect(() => {
         async function fetchData() {
@@ -365,9 +371,65 @@ export default function TicketsPage() {
                                     </td>
                                     <td className={styles.dateCell}>{formatDate(ticket.created_at)}</td>
                                     <td>
-                                        <button className={styles.actionBtn}>
-                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="1" /><circle cx="19" cy="12" r="1" /><circle cx="5" cy="12" r="1" /></svg>
-                                        </button>
+                                        <DropdownMenu
+                                            options={[
+                                                {
+                                                    label: 'Ver Detalhes',
+                                                    icon: (
+                                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                                                            <circle cx="12" cy="12" r="3" />
+                                                        </svg>
+                                                    ),
+                                                    onClick: () => window.open(`/event/${ticket.event_id}`, '_blank'),
+                                                },
+                                                {
+                                                    label: 'Baixar PDF',
+                                                    icon: (
+                                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                                                            <polyline points="7 10 12 15 17 10" />
+                                                            <line x1="12" y1="15" x2="12" y2="3" />
+                                                        </svg>
+                                                    ),
+                                                    onClick: () => {
+                                                        // TODO: Implement PDF download
+                                                        alert('Funcionalidade de download em desenvolvimento');
+                                                    },
+                                                },
+                                                {
+                                                    label: 'Invalidar',
+                                                    icon: (
+                                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                                            <circle cx="12" cy="12" r="10" />
+                                                            <line x1="15" y1="9" x2="9" y2="15" />
+                                                            <line x1="9" y1="9" x2="15" y2="15" />
+                                                        </svg>
+                                                    ),
+                                                    onClick: async () => {
+                                                        if (!confirm(`Tem certeza que deseja invalidar o ingresso ${ticket.ticket_code}?`)) {
+                                                            return;
+                                                        }
+                                                        try {
+                                                            const { error } = await supabase
+                                                                .from('tickets')
+                                                                .update({ status: 'cancelled' })
+                                                                .eq('id', ticket.id);
+                                                            if (error) throw error;
+                                                            updateTicketStatus(ticket.id, 'cancelled');
+                                                        } catch (error) {
+                                                            console.error('Error invalidating ticket:', error);
+                                                            alert('Erro ao invalidar ingresso. Tente novamente.');
+                                                        }
+                                                    },
+                                                    danger: true,
+                                                },
+                                            ]}
+                                        >
+                                            <button className={styles.actionBtn}>
+                                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="1" /><circle cx="19" cy="12" r="1" /><circle cx="5" cy="12" r="1" /></svg>
+                                            </button>
+                                        </DropdownMenu>
                                     </td>
                                 </tr>
                             ))

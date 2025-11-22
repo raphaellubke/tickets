@@ -82,7 +82,7 @@ export default function NewFormPage() {
 
             // Populate form data
             setFormData({
-                name: form.name || '',
+                name: form.title || form.name || '',
                 description: form.description || '',
                 status: form.status || 'rascunho'
             });

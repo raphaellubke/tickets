@@ -141,3 +141,34 @@
     transform: translateY(-1px);
     box-shadow: var(--shadow-md);
 }
+
+.loginButton {
+    cursor: pointer;
+}
+
+.profileButton {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+    padding: 0.6rem 1.5rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-full);
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--text-color);
+    background-color: var(--white);
+    transition: all 0.2s;
+    box-shadow: var(--shadow-sm);
+    text-decoration: none;
+}
+
+.profileButton:hover {
+    border-color: var(--primary-color);
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-md);
+    color: var(--primary-color);
+}
+
+.profileIcon {
+    font-size: 1rem;
+}

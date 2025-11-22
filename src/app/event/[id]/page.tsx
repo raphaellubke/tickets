@@ -24,6 +24,132 @@ interface TicketType {
     endSale: string | null;
 }
 
+// Dados placeholder para eventos de exemplo
+const getPlaceholderEvent = (id: string) => {
+    const placeholders: Record<string, any> = {
+        '1': {
+            id: '1',
+            name: 'Conferência Anual 2024',
+            description: 'Um evento transformador que reúne líderes e membros da comunidade para momentos de adoração, ensino e comunhão.',
+            category: 'conferencia',
+            image_url: 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?ixlib=rb-4.0.3&auto=format&fit=crop&w=1200&q=80',
+            location: 'Arena Divine',
+            event_date: '2024-12-15',
+            event_time: '19:00',
+            status: 'publicado',
+            views: 0,
+        },
+        '2': {
+            id: '2',
+            name: 'Noite de Adoração',
+            description: 'Uma experiência única de adoração e louvor com músicas inspiradoras e momentos de reflexão espiritual.',
+            category: 'culto',
+            image_url: 'https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?ixlib=rb-4.0.3&auto=format&fit=crop&w=1200&q=80',
+            location: 'Centro de Convenções',
+            event_date: '2024-12-22',
+            event_time: '20:00',
+            status: 'publicado',
+            views: 0,
+        },
+        '3': {
+            id: '3',
+            name: 'Retiro de Jovens',
+            description: 'Um retiro espiritual para jovens com atividades, palestras e momentos de comunhão em um ambiente natural.',
+            category: 'retiro',
+            image_url: 'https://images.unsplash.com/photo-1511632765486-a01980e01a18?ixlib=rb-4.0.3&auto=format&fit=crop&w=1200&q=80',
+            location: 'Sítio Esperança',
+            event_date: '2024-12-28',
+            event_time: '08:00',
+            status: 'publicado',
+            views: 0,
+        },
+    };
+    return placeholders[id] || null;
+};
+
+const getPlaceholderTicketGroups = (eventId: string): TicketGroup[] => {
+    const groups: Record<string, TicketGroup[]> = {
+        '1': [
+            {
+                id: 'group-1-1',
+                name: 'Ingressos Gerais',
+                description: 'Ingressos para acesso geral ao evento',
+                ticketTypes: [
+                    {
+                        id: 'type-1-1',
+                        name: 'Ingresso Individual',
+                        price: 80.00,
+                        quantityAvailable: 500,
+                        quantitySold: 0,
+                        isActive: true,
+                        startSale: null,
+                        endSale: null,
+                    },
+                    {
+                        id: 'type-1-2',
+                        name: 'Ingresso VIP',
+                        price: 150.00,
+                        quantityAvailable: 100,
+                        quantitySold: 0,
+                        isActive: true,
+                        startSale: null,
+                        endSale: null,
+                    },
+                ],
+            },
+        ],
+        '2': [
+            {
+                id: 'group-2-1',
+                name: 'Ingressos',
+                description: null,
+                ticketTypes: [
+                    {
+                        id: 'type-2-1',
+                        name: 'Ingresso Padrão',
+                        price: 45.00,
+                        quantityAvailable: 300,
+                        quantitySold: 0,
+                        isActive: true,
+                        startSale: null,
+                        endSale: null,
+                    },
+                ],
+            },
+        ],
+        '3': [
+            {
+                id: 'group-3-1',
+                name: 'Pacotes',
+                description: 'Escolha o pacote ideal para o retiro',
+                ticketTypes: [
+                    {
+                        id: 'type-3-1',
+                        name: 'Pacote Básico',
+                        price: 120.00,
+                        quantityAvailable: 200,
+                        quantitySold: 0,
+                        isActive: true,
+                        startSale: null,
+                        endSale: null,
+                    },
+                    {
+                        id: 'type-3-2',
+                        name: 'Pacote Completo',
+                        price: 200.00,
+                        quantityAvailable: 100,
+                        quantitySold: 0,
+                        isActive: true,
+                        startSale: null,
+                        endSale: null,
+                    },
+                ],
+            },
+        ],
+    };
+    return groups[eventId] || [];
+};
+
 export default function EventDetails({ params }: { params: Promise<{ id: string }> }) {
     const { id: eventId } = use(params);
     const supabase = createClient();
@@ -32,6 +158,7 @@ export default function EventDetails({ params }: { params: Promise<{ id: string 
     const [ticketQuantities, setTicketQuantities] = useState<Record<string, number>>({});
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [isPlaceholder, setIsPlaceholder] = useState(false);
 
     useEffect(() => {
         async function fetchEventData() {
@@ -49,20 +176,25 @@ export default function EventDetails({ params }: { params: Promise<{ id: string 
                     .eq('id', eventId)
                     .single();
 
-                if (eventError) {
+                if (eventError || !eventData) {
+                    // Se não encontrou no banco, verifica se é um placeholder
+                    const placeholderEvent = getPlaceholderEvent(eventId);
+                    if (placeholderEvent) {
+                        setEvent(placeholderEvent);
+                        setIsPlaceholder(true);
+                        setTicketGroups(getPlaceholderTicketGroups(eventId));
+                        setLoading(false);
+                        return;
+                    }
+                    
                     console.error('Error fetching event:', eventError);
-                    setError(eventError.message || 'Evento não encontrado');
-                    setLoading(false);
-                    return;
-                }
-
-                if (!eventData) {
-                    setError('Evento não encontrado');
+                    setError(eventError?.message || 'Evento não encontrado');
                     setLoading(false);
                     return;
                 }
 
                 setEvent(eventData);
+                setIsPlaceholder(false);
 
                 // Increment views (don't wait for this to complete)
                 supabase
@@ -244,7 +376,7 @@ export default function EventDetails({ params }: { params: Promise<{ id: string 
         );
     }
 
-    if (error || !event) {
+    if (error || (!event && !isPlaceholder)) {
         return (
             <main className={styles.main}>
                 <Header />
