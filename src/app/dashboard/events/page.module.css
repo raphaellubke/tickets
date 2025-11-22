@@ -29,7 +29,7 @@
     align-items: center;
     gap: 8px;
     padding: 8px 16px;
-    background: #111827;
+    background: var(--primary-color);
     color: white;
     border: none;
     border-radius: 8px;
@@ -41,7 +41,7 @@
 }
 
 .primaryBtn:hover {
-    background: #1f2937;
+    background: var(--primary-hover);
     transform: translateY(-1px);
 }
 
@@ -109,8 +109,8 @@
 }
 
 .searchInput:focus {
-    border-color: #3b82f6;
-    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 2px rgba(74, 144, 226, 0.1);
 }
 
 /* Table */
@@ -252,7 +252,7 @@
 
 .progressFill {
     height: 100%;
-    background: #111827;
+    background: var(--primary-color);
     border-radius: 100px;
 }
 

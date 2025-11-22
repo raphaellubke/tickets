@@ -4,7 +4,7 @@ import Link from 'next/link';
 import styles from './EventCard.module.css';
 
 interface EventCardProps {
-    id: number;
+    id: string | number;
     image: string;
     tag: string;
     title: string;

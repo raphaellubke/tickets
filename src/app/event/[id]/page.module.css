@@ -1,17 +1,57 @@
+/* Main Container */
 .main {
     min-height: 100vh;
-    background-color: #f8fafc;
-    color: var(--text-color);
+    background: linear-gradient(to bottom, #ffffff 0%, #f8fafc 100%);
+    color: #0f172a;
 }
 
-.hero {
+/* Loading & Error States */
+.loadingContainer,
+.errorContainer {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 70vh;
+    padding: 4rem 2rem;
+    text-align: center;
+}
+
+.spinner {
+    width: 48px;
+    height: 48px;
+    border: 4px solid #e2e8f0;
+    border-top-color: var(--primary-color, #3b82f6);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin-bottom: 1.5rem;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+.errorContainer h2 {
+    font-size: 1.75rem;
+    font-weight: 700;
+    color: #0f172a;
+    margin-bottom: 0.75rem;
+}
+
+.errorContainer p {
+    color: #64748b;
+    font-size: 1rem;
+}
+
+/* Hero Section */
+.heroSection {
     position: relative;
-    height: 65vh;
-    min-height: 550px;
+    min-height: 75vh;
     width: 100%;
     display: flex;
     align-items: flex-end;
     overflow: hidden;
+    margin-bottom: 0;
 }
 
 .heroImage {
@@ -23,14 +63,13 @@
     background-size: cover;
     background-position: center;
     z-index: 1;
-    animation: slowZoom 20s infinite alternate;
+    animation: slowZoom 35s infinite alternate ease-in-out;
 }
 
 @keyframes slowZoom {
     from {
         transform: scale(1);
     }
-
     to {
         transform: scale(1.1);
     }
@@ -42,11 +81,13 @@
     left: 0;
     width: 100%;
     height: 100%;
-    background: linear-gradient(to top,
-            rgba(248, 250, 252, 1) 0%,
-            rgba(248, 250, 252, 0.9) 15%,
-            rgba(248, 250, 252, 0.4) 50%,
-            rgba(15, 23, 42, 0.4) 100%);
+    background: linear-gradient(
+        to top,
+        rgba(248, 250, 252, 1) 0%,
+        rgba(248, 250, 252, 0.98) 15%,
+        rgba(248, 250, 252, 0.7) 50%,
+        rgba(15, 23, 42, 0.6) 100%
+    );
     z-index: 2;
 }
 
@@ -54,87 +95,128 @@
     position: relative;
     z-index: 3;
     width: 100%;
+    padding-bottom: 0;
+}
+
+.heroContainer {
     max-width: 1560px;
     margin: 0 auto;
-    padding: 0 var(--spacing-md) 5rem;
+    padding: 4rem var(--spacing-md, 2rem) 3rem;
 }
 
-.tag {
-    background: #ffffff;
-    color: #d97706;
-    padding: 8px 16px;
-    border-radius: 100px;
-    font-size: 0.875rem;
-    font-weight: 800;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    margin-bottom: 1.5rem;
+.categoryBadge {
     display: inline-flex;
     align-items: center;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-    border: 1px solid rgba(217, 119, 6, 0.1);
+    padding: 0.625rem 1.25rem;
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(10px);
+    color: #d97706;
+    border-radius: 50px;
+    font-size: 0.875rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-bottom: 1.5rem;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+    border: 1px solid rgba(217, 119, 6, 0.2);
 }
 
-.title {
-    font-size: 4.5rem;
+.eventTitle {
+    font-size: clamp(2.5rem, 6vw, 5rem);
     font-weight: 900;
-    margin-bottom: 2.5rem;
-    line-height: 1.05;
-    letter-spacing: -0.04em;
-    max-width: 1000px;
+    line-height: 1.1;
+    letter-spacing: -0.03em;
     color: #0f172a;
-    text-shadow: 0 2px 4px rgba(255, 255, 255, 0.5);
+    margin-bottom: 2rem;
+    text-shadow: 0 2px 12px rgba(255, 255, 255, 0.9);
+    max-width: 1000px;
 }
 
-.heroDetails {
+.eventMeta {
     display: flex;
-    gap: 1.5rem;
-    font-size: 1.1rem;
-    font-weight: 600;
-    color: #334155;
+    flex-wrap: wrap;
+    gap: 1rem;
 }
 
-.detailItem {
+.metaCard {
     display: flex;
     align-items: center;
-    gap: 0.75rem;
-    background: #ffffff;
-    padding: 0.75rem 1.25rem;
+    gap: 1rem;
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(10px);
+    padding: 1rem 1.5rem;
     border-radius: 16px;
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
-    border: 1px solid #e2e8f0;
-    transition: transform 0.2s ease;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.8);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
-.detailItem:hover {
+.metaCard:hover {
     transform: translateY(-2px);
-    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
 }
 
-.detailIcon {
-    font-size: 1.25rem;
+.metaIcon {
+    flex-shrink: 0;
+    color: var(--primary-color, #3b82f6);
+}
+
+.metaCard > div {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.metaLabel {
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #64748b;
+}
+
+.metaValue {
+    font-size: 1rem;
+    font-weight: 600;
+    color: #0f172a;
+}
+
+/* Content Wrapper */
+.contentWrapper {
+    background: #f8fafc;
+    padding: 4rem 0;
 }
 
 .container {
     max-width: 1560px;
     margin: 0 auto;
-    padding: 2rem var(--spacing-md) 6rem;
+    padding: 0 var(--spacing-md, 2rem);
     display: grid;
-    grid-template-columns: 1fr 420px;
-    gap: 5rem;
+    grid-template-columns: 1fr 480px;
+    gap: 4rem;
+    align-items: start;
 }
 
-.content {
+/* Main Content */
+.mainContent {
     display: flex;
     flex-direction: column;
-    gap: 4rem;
+    gap: 2.5rem;
+}
+
+.section {
+    background: #ffffff;
+    padding: 2.5rem;
+    border-radius: 24px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    border: 1px solid #e2e8f0;
 }
 
 .sectionTitle {
-    font-size: 2rem;
+    font-size: 1.75rem;
     font-weight: 800;
-    margin-bottom: 1.5rem;
     color: #0f172a;
+    margin-bottom: 1.5rem;
     display: flex;
     align-items: center;
     gap: 1rem;
@@ -144,40 +226,140 @@
 .sectionTitle::before {
     content: '';
     display: block;
-    width: 6px;
+    width: 5px;
     height: 32px;
-    background: linear-gradient(to bottom, var(--primary-color), var(--primary-hover));
-    border-radius: 4px;
+    background: linear-gradient(to bottom, var(--primary-color, #3b82f6), var(--primary-hover, #2563eb));
+    border-radius: 3px;
 }
 
 .description {
     font-size: 1.125rem;
-    line-height: 1.8;
+    line-height: 1.9;
     color: #334155;
 }
 
-.address {
-    font-size: 1.125rem;
-    line-height: 1.8;
-    color: #334155;
-    background: #ffffff;
-    padding: 2rem;
-    border-radius: 24px;
+.description p {
+    margin-bottom: 1rem;
+}
+
+.description p:last-child {
+    margin-bottom: 0;
+}
+
+/* Location Card */
+.locationCard {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+}
+
+.locationHeader {
+    display: flex;
+    align-items: flex-start;
+    gap: 1.25rem;
+}
+
+.locationIcon {
+    flex-shrink: 0;
+    color: var(--primary-color, #3b82f6);
+    margin-top: 4px;
+}
+
+.locationName {
+    font-size: 1.375rem;
+    font-weight: 700;
+    color: #0f172a;
+    margin-bottom: 0.5rem;
+}
+
+.locationAddress {
+    font-size: 1rem;
+    color: #64748b;
+    line-height: 1.6;
+}
+
+.locationNotes {
+    font-size: 0.95rem;
+    color: #64748b;
+    font-style: italic;
+    padding-top: 1.25rem;
+    border-top: 1px solid #e2e8f0;
+    line-height: 1.6;
+}
+
+/* Info Grid */
+.infoGrid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 1.25rem;
+}
+
+.infoCard {
+    display: flex;
+    align-items: flex-start;
+    gap: 1rem;
+    padding: 1.25rem;
+    background: #f8fafc;
+    border-radius: 16px;
     border: 1px solid #e2e8f0;
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.02);
 }
 
+.infoIcon {
+    flex-shrink: 0;
+    color: var(--primary-color, #3b82f6);
+    margin-top: 2px;
+}
+
+.infoCard > div {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    flex: 1;
+}
+
+.infoLabel {
+    font-size: 0.875rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #64748b;
+}
+
+.infoValue {
+    font-size: 1rem;
+    font-weight: 600;
+    color: #0f172a;
+}
+
+.tagsContainer {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.tag {
+    display: inline-block;
+    padding: 0.375rem 0.875rem;
+    background: #ffffff;
+    color: #475569;
+    border-radius: 8px;
+    font-size: 0.875rem;
+    font-weight: 500;
+    border: 1px solid #e2e8f0;
+}
+
+/* Sidebar */
 .sidebar {
     position: sticky;
-    top: 120px;
+    top: 100px;
     height: fit-content;
 }
 
 .ticketCard {
     background: #ffffff;
-    padding: 2.5rem;
-    border-radius: 32px;
-    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.08);
+    padding: 2rem;
+    border-radius: 24px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.08);
     border: 1px solid #e2e8f0;
     position: relative;
     overflow: hidden;
@@ -189,18 +371,18 @@
     top: 0;
     left: 0;
     width: 100%;
-    height: 6px;
-    background: linear-gradient(90deg, var(--primary-color), #8b5cf6);
+    height: 5px;
+    background: linear-gradient(90deg, var(--primary-color, #3b82f6), #8b5cf6, #ec4899);
 }
 
 .ticketHeader {
     margin-bottom: 2rem;
     padding-bottom: 1.5rem;
-    border-bottom: 1px solid #f1f5f9;
+    border-bottom: 2px solid #f1f5f9;
 }
 
 .ticketTitle {
-    font-size: 1.75rem;
+    font-size: 1.875rem;
     font-weight: 800;
     color: #0f172a;
     margin-bottom: 0.5rem;
@@ -213,43 +395,201 @@
     font-weight: 500;
 }
 
-.priceRow {
+/* Ticket Groups */
+.ticketGroups {
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+    margin-bottom: 2rem;
+}
+
+.ticketGroup {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.groupName {
+    font-size: 1rem;
+    font-weight: 700;
+    color: #0f172a;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin: 0;
+}
+
+.groupDescription {
+    font-size: 0.875rem;
+    color: #64748b;
+    margin: 0;
+    line-height: 1.6;
+}
+
+.ticketTypesList {
+    display: flex;
+    flex-direction: column;
+    gap: 0.875rem;
+}
+
+.ticketTypeCard {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    padding: 1.25rem;
+    background: #f8fafc;
+    border: 2px solid #e2e8f0;
+    border-radius: 16px;
+    transition: all 0.2s ease;
+}
+
+.ticketTypeCard:hover:not(.disabled) {
+    background: #f1f5f9;
+    border-color: var(--primary-color, #3b82f6);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.1);
+}
+
+.ticketTypeCard.selected {
+    background: #eff6ff;
+    border-color: var(--primary-color, #3b82f6);
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.ticketTypeCard.disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    background: #f1f5f9;
+}
+
+.ticketTypeContent {
     display: flex;
     justify-content: space-between;
-    align-items: flex-end;
-    margin-bottom: 2rem;
-    background: #f8fafc;
-    padding: 1rem;
-    border-radius: 16px;
+    align-items: flex-start;
+    gap: 1rem;
 }
 
-.priceLabel {
-    font-weight: 700;
+.ticketTypeInfo {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    flex: 1;
+}
+
+.ticketTypeName {
+    font-weight: 600;
+    color: #0f172a;
+    font-size: 1rem;
+}
+
+.ticketAvailability {
+    font-size: 0.75rem;
     color: #64748b;
-    font-size: 0.85rem;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
+    font-weight: 500;
 }
 
-.price {
-    font-size: 2rem;
+.ticketSoldOut {
+    font-size: 0.75rem;
+    color: #ef4444;
+    font-weight: 600;
+}
+
+.ticketTypePrice {
+    font-size: 1.5rem;
     font-weight: 800;
     color: #0f172a;
+    white-space: nowrap;
+}
+
+.quantitySection {
+    padding-top: 1rem;
+    border-top: 1px solid #e2e8f0;
+}
+
+.quantityControls {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 0.5rem;
+    width: fit-content;
+}
+
+.quantityBtn {
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--primary-color, #3b82f6);
+    color: #ffffff;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s ease;
     line-height: 1;
 }
 
+.quantityBtn:hover:not(:disabled) {
+    background: var(--primary-hover, #2563eb);
+    transform: scale(1.05);
+}
+
+.quantityBtn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    background: #cbd5e1;
+}
+
+.quantityValue {
+    min-width: 40px;
+    text-align: center;
+    font-weight: 700;
+    color: #0f172a;
+    font-size: 1.125rem;
+}
+
+/* Total Section */
+.totalSection {
+    margin: 2rem 0;
+    padding: 1.5rem;
+    background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+    border-radius: 16px;
+    border: 2px solid #e2e8f0;
+}
+
+.totalInfo {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.totalLabel {
+    font-size: 1rem;
+    font-weight: 600;
+    color: #64748b;
+}
+
+.totalPrice {
+    font-size: 2rem;
+    font-weight: 800;
+    color: #0f172a;
+}
+
+/* Buy Button */
 .buyButton {
     width: 100%;
     padding: 1.25rem;
-    background: var(--primary-color);
-    color: var(--white);
+    background: var(--primary-color, #3b82f6);
+    color: #ffffff;
     border: none;
-    border-radius: 20px;
+    border-radius: 16px;
     font-size: 1.125rem;
     font-weight: 700;
     cursor: pointer;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    margin-bottom: 1.5rem;
+    margin-bottom: 1rem;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -257,15 +597,30 @@
     box-shadow: 0 10px 25px -5px rgba(59, 130, 246, 0.4);
 }
 
-.buyButton:hover {
-    background-color: var(--primary-hover);
+.buyButton:hover:not(.disabled) {
+    background: var(--primary-hover, #2563eb);
     transform: translateY(-2px) scale(1.02);
     box-shadow: 0 20px 30px -10px rgba(59, 130, 246, 0.5);
 }
 
+.buyButton.disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    background: #cbd5e1;
+    box-shadow: none;
+}
+
+.buyButton svg {
+    transition: transform 0.2s ease;
+}
+
+.buyButton:hover:not(.disabled) svg {
+    transform: translateX(4px);
+}
+
 .disclaimer {
     text-align: center;
-    font-size: 0.85rem;
+    font-size: 0.875rem;
     color: #94a3b8;
     display: flex;
     align-items: center;
@@ -273,12 +628,28 @@
     gap: 0.5rem;
 }
 
-.disclaimer::before {
-    content: '🔒';
-    font-size: 0.9rem;
+.disclaimer svg {
+    flex-shrink: 0;
 }
 
-@media (max-width: 1024px) {
+.noTickets {
+    text-align: center;
+    padding: 3rem 1rem;
+    color: #64748b;
+}
+
+.noTickets svg {
+    margin: 0 auto 1rem;
+    color: #cbd5e1;
+}
+
+.noTickets p {
+    font-size: 1rem;
+    font-weight: 500;
+}
+
+/* Responsive */
+@media (max-width: 1200px) {
     .container {
         grid-template-columns: 1fr;
         gap: 3rem;
@@ -286,29 +657,83 @@
 
     .sidebar {
         position: static;
+        max-width: 600px;
+        margin: 0 auto;
+    }
+}
+
+@media (max-width: 768px) {
+    .heroSection {
+        min-height: 60vh;
     }
 
-    .title {
-        font-size: 3.5rem;
+    .heroContainer {
+        padding: 3rem 1.5rem 2rem;
+    }
+
+    .eventTitle {
+        font-size: 2.5rem;
+    }
+
+    .eventMeta {
+        flex-direction: column;
+        gap: 0.75rem;
+    }
+
+    .metaCard {
+        width: 100%;
+    }
+
+    .contentWrapper {
+        padding: 2rem 0;
+    }
+
+    .container {
+        padding: 0 1.5rem;
+        gap: 2rem;
+    }
+
+    .section {
+        padding: 1.5rem;
+    }
+
+    .sectionTitle {
+        font-size: 1.5rem;
+    }
+
+    .ticketCard {
+        padding: 1.5rem;
+    }
+
+    .ticketTypeCard {
+        padding: 1rem;
+    }
+
+    .infoGrid {
+        grid-template-columns: 1fr;
     }
 }
 
 @media (max-width: 640px) {
-    .hero {
-        height: 80vh;
+    .eventTitle {
+        font-size: 2rem;
     }
 
-    .title {
-        font-size: 2.5rem;
-    }
-
-    .heroDetails {
+    .ticketTypeContent {
         flex-direction: column;
-        gap: 1rem;
-        align-items: flex-start;
+        align-items: stretch;
     }
 
-    .detailItem {
+    .ticketTypePrice {
+        font-size: 1.25rem;
+    }
+
+    .quantitySection {
         width: 100%;
+    }
+
+    .quantityControls {
+        width: 100%;
+        justify-content: center;
     }
 }

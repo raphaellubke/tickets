@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/context/AuthContext';
+import InviteMemberModal from '@/components/InviteMemberModal/InviteMemberModal';
 import styles from './page.module.css';
 
 interface Member {
@@ -20,6 +21,7 @@ export default function MembersPage() {
     const [members, setMembers] = useState<Member[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
+    const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
     const supabase = createClient();
 
     useEffect(() => {
@@ -120,7 +122,10 @@ export default function MembersPage() {
                     <h1 className={styles.pageTitle}>Membros</h1>
                     <p className={styles.pageSubtitle}>Gerencie quem tem acesso à sua organização</p>
                 </div>
-                <button className={styles.primaryBtn}>
+                <button 
+                    className={styles.primaryBtn}
+                    onClick={() => setIsInviteModalOpen(true)}
+                >
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="8.5" cy="7" r="4" /><line x1="20" y1="8" x2="20" y2="14" /><line x1="23" y1="11" x2="17" y2="11" /></svg>
                     Convidar Membro
                 </button>
@@ -228,6 +233,16 @@ export default function MembersPage() {
                     </div>
                 </div>
             </div>
+
+            <InviteMemberModal
+                isOpen={isInviteModalOpen}
+                onClose={() => setIsInviteModalOpen(false)}
+                onSuccess={() => {
+                    setIsInviteModalOpen(false);
+                    // Reload members
+                    window.location.reload();
+                }}
+            />
         </div>
     );
 }

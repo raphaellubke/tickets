@@ -271,6 +271,9 @@
     border-radius: 8px;
     transition: background 0.2s;
     border: 1px solid transparent;
+    text-decoration: none;
+    color: inherit;
+    cursor: pointer;
 }
 
 .upcomingItem:hover {
@@ -443,6 +446,13 @@
     font-size: 12px;
     color: #6b7280;
     font-weight: 500;
+}
+
+.emptyState {
+    padding: 2rem;
+    text-align: center;
+    color: #6b7280;
+    font-size: 14px;
 }
 
 @media (max-width: 1024px) {

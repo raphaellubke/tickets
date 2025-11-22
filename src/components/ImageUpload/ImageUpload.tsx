@@ -1,10 +1,11 @@
 'use client';
 
-import { useState, useRef, DragEvent, ChangeEvent } from 'react';
+import { useState, useRef, useEffect, DragEvent, ChangeEvent } from 'react';
 import styles from './ImageUpload.module.css';
 
 interface ImageUploadProps {
     onImageSelect: (file: File) => void;
+    onImageRemove?: () => void;
     currentImage?: string;
     label?: string;
     maxSizeMB?: number;
@@ -12,6 +13,7 @@ interface ImageUploadProps {
 
 export default function ImageUpload({
     onImageSelect,
+    onImageRemove,
     currentImage,
     label = 'Imagem de Capa',
     maxSizeMB = 5
@@ -20,6 +22,13 @@ export default function ImageUpload({
     const [isDragging, setIsDragging] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
+
+    // Update preview when currentImage changes
+    useEffect(() => {
+        if (currentImage) {
+            setPreview(currentImage);
+        }
+    }, [currentImage]);
 
     const validateFile = (file: File): boolean => {
         setError(null);
@@ -99,6 +108,9 @@ export default function ImageUpload({
         setError(null);
         if (fileInputRef.current) {
             fileInputRef.current.value = '';
+        }
+        if (onImageRemove) {
+            onImageRemove();
         }
     };
 

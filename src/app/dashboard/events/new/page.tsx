@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, FormEvent } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, FormEvent, useEffect } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/context/AuthContext';
 import { uploadImage } from '@/lib/uploadImage';
@@ -19,18 +19,42 @@ interface EventFormData {
     address: string;
     addressNotes: string;
     category: string;
-    maxAttendees: string;
-    ticketPrice: string;
-    eventUrl: string;
     tags: string;
+    status: string;
+    formId: string;
+    requireForm: boolean;
     allowWaitlist: boolean;
     sendReminder: boolean;
 }
 
+interface TicketGroup {
+    id: string;
+    name: string;
+    description: string;
+    orderIndex: number;
+    isActive: boolean;
+    ticketTypes: TicketType[];
+}
+
+interface TicketType {
+    id: string;
+    name: string;
+    description: string;
+    price: string;
+    quantityAvailable: string;
+    startSale: string;
+    endSale: string;
+    isActive: boolean;
+}
+
 export default function NewEventPage() {
     const router = useRouter();
+    const searchParams = useSearchParams();
     const { user } = useAuth();
     const supabase = createClient();
+
+    const eventId = searchParams.get('id');
+    const isEditMode = !!eventId;
 
     const [formData, setFormData] = useState<EventFormData>({
         title: '',
@@ -43,17 +67,21 @@ export default function NewEventPage() {
         address: '',
         addressNotes: '',
         category: '',
-        maxAttendees: '',
-        ticketPrice: '',
-        eventUrl: '',
         tags: '',
+        status: 'rascunho',
+        formId: '',
+        requireForm: false,
         allowWaitlist: false,
         sendReminder: true
     });
 
     const [coverImage, setCoverImage] = useState<File | null>(null);
+    const [existingImageUrl, setExistingImageUrl] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
+    const [loadingData, setLoadingData] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [ticketGroups, setTicketGroups] = useState<TicketGroup[]>([]);
+    const [availableForms, setAvailableForms] = useState<Array<{ id: string; name: string }>>([]);
 
     const handleInputChange = (
         e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
@@ -69,6 +97,275 @@ export default function NewEventPage() {
 
     const handleImageSelect = (file: File) => {
         setCoverImage(file);
+        setExistingImageUrl(null); // Clear existing image when new one is selected
+    };
+
+    const handleImageRemove = () => {
+        setCoverImage(null);
+        setExistingImageUrl(null);
+    };
+
+    const loadForms = async () => {
+        if (!user) return;
+
+        try {
+            // Get user's organization
+            const { data: memberData } = await supabase
+                .from('organization_members')
+                .select('organization_id')
+                .eq('user_id', user.id)
+                .single();
+
+            if (!memberData) return;
+
+            // Fetch forms from organization
+            const { data: formsData, error: formsError } = await supabase
+                .from('forms')
+                .select('id, name')
+                .eq('organization_id', memberData.organization_id)
+                .eq('is_active', true)
+                .order('created_at', { ascending: false });
+
+            if (!formsError && formsData) {
+                setAvailableForms(formsData);
+            }
+        } catch (err) {
+            console.error('Error loading forms:', err);
+        }
+    };
+
+    // Função para formatar valor em BRL
+    const formatBRL = (value: string | number): string => {
+        if (!value || value === '' || value === '0' || value === 0) return 'R$ 0,00';
+        
+        // Converte para número se for string
+        const numValue = typeof value === 'string' ? parseFloat(value) : value;
+        
+        if (isNaN(numValue) || numValue === 0) return 'R$ 0,00';
+        
+        // Formata como BRL
+        return new Intl.NumberFormat('pt-BR', {
+            style: 'currency',
+            currency: 'BRL',
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        }).format(numValue);
+    };
+
+    // Função para converter BRL formatado para número
+    const parseBRL = (value: string): string => {
+        // Remove tudo que não é número
+        const numbers = value.replace(/\D/g, '');
+        
+        if (!numbers) return '0';
+        
+        // Converte para número decimal
+        const cents = parseInt(numbers);
+        const reais = cents / 100;
+        
+        return reais.toString();
+    };
+
+    // Handler para mudança de preço com máscara
+    const handlePriceChange = (groupId: string, typeId: string, value: string) => {
+        const numeric = parseBRL(value);
+        updateTicketType(groupId, typeId, 'price', numeric);
+    };
+
+    // Load event data when in edit mode
+    useEffect(() => {
+        if (isEditMode && eventId && user) {
+            loadEventData();
+        }
+    }, [isEditMode, eventId, user]);
+
+    // Load available forms
+    useEffect(() => {
+        if (user) {
+            loadForms();
+        }
+    }, [user]);
+
+    const loadEventData = async () => {
+        if (!eventId || !user) return;
+
+        setLoadingData(true);
+        try {
+            // Get user's organization
+            const { data: memberData } = await supabase
+                .from('organization_members')
+                .select('organization_id')
+                .eq('user_id', user.id)
+                .single();
+
+            if (!memberData) {
+                setError('Organização não encontrada');
+                setLoadingData(false);
+                return;
+            }
+
+            // Load event
+            const { data: event, error: eventError } = await supabase
+                .from('events')
+                .select('*')
+                .eq('id', eventId)
+                .eq('organization_id', memberData.organization_id)
+                .single();
+
+            if (eventError || !event) {
+                setError('Evento não encontrado');
+                setLoadingData(false);
+                return;
+            }
+
+            // Load associated form
+            let associatedFormId = event.form_id || '';
+            if (!associatedFormId) {
+                const { data: eventForm } = await supabase
+                    .from('event_forms')
+                    .select('form_id')
+                    .eq('event_id', eventId)
+                    .single();
+                
+                if (eventForm) {
+                    associatedFormId = eventForm.form_id;
+                }
+            }
+
+            // Populate form data
+            setFormData({
+                title: event.name || '',
+                description: event.description || '',
+                date: event.event_date || '',
+                time: event.event_time || '',
+                endDate: event.end_date || '',
+                endTime: event.end_time || '',
+                location: event.location || '',
+                address: event.address || '',
+                addressNotes: event.address_notes || '',
+                category: event.category || '',
+                tags: event.tags?.join(', ') || '',
+                status: event.status || 'rascunho',
+                formId: associatedFormId,
+                requireForm: event.require_form || false,
+                allowWaitlist: event.allow_waitlist || false,
+                sendReminder: event.send_reminder ?? true
+            });
+
+            if (event.image_url) {
+                setExistingImageUrl(event.image_url);
+            }
+
+            // Load ticket groups and types
+            const { data: groups, error: groupsError } = await supabase
+                .from('event_ticket_groups')
+                .select('*')
+                .eq('event_id', eventId)
+                .order('order_index', { ascending: true });
+
+            if (!groupsError && groups) {
+                const groupsWithTypes: TicketGroup[] = [];
+
+                for (const group of groups) {
+                    const { data: types, error: typesError } = await supabase
+                        .from('event_ticket_types')
+                        .select('*')
+                        .eq('group_id', group.id)
+                        .order('created_at', { ascending: true });
+
+                    const ticketTypes: TicketType[] = (types || []).map(type => ({
+                        id: type.id,
+                        name: type.name,
+                        description: type.description || '',
+                        price: type.price?.toString() || '0',
+                        quantityAvailable: type.quantity_available?.toString() || '0',
+                        startSale: type.start_sale ? new Date(type.start_sale).toISOString().slice(0, 16) : '',
+                        endSale: type.end_sale ? new Date(type.end_sale).toISOString().slice(0, 16) : '',
+                        isActive: type.is_active ?? true
+                    }));
+
+                    groupsWithTypes.push({
+                        id: group.id,
+                        name: group.name,
+                        description: group.description || '',
+                        orderIndex: group.order_index || 0,
+                        isActive: group.is_active ?? true,
+                        ticketTypes
+                    });
+                }
+
+                setTicketGroups(groupsWithTypes);
+            }
+        } catch (err: any) {
+            console.error('Error loading event:', err);
+            setError('Erro ao carregar evento');
+        } finally {
+            setLoadingData(false);
+        }
+    };
+
+    const addTicketGroup = () => {
+        const newGroup: TicketGroup = {
+            id: `temp-${Date.now()}`,
+            name: '',
+            description: '',
+            orderIndex: ticketGroups.length,
+            isActive: true,
+            ticketTypes: []
+        };
+        setTicketGroups([...ticketGroups, newGroup]);
+    };
+
+    const removeTicketGroup = (groupId: string) => {
+        setTicketGroups(ticketGroups.filter(g => g.id !== groupId));
+    };
+
+    const updateTicketGroup = (groupId: string, field: keyof TicketGroup, value: any) => {
+        setTicketGroups(ticketGroups.map(group => 
+            group.id === groupId ? { ...group, [field]: value } : group
+        ));
+    };
+
+    const addTicketType = (groupId: string) => {
+        setTicketGroups(ticketGroups.map(group => {
+            if (group.id === groupId) {
+                const newType: TicketType = {
+                    id: `temp-${Date.now()}-${Math.random()}`,
+                    name: '',
+                    description: '',
+                    price: '0',
+                    quantityAvailable: '0',
+                    startSale: '',
+                    endSale: '',
+                    isActive: true
+                };
+                return { ...group, ticketTypes: [...group.ticketTypes, newType] };
+            }
+            return group;
+        }));
+    };
+
+    const removeTicketType = (groupId: string, typeId: string) => {
+        setTicketGroups(ticketGroups.map(group => {
+            if (group.id === groupId) {
+                return { ...group, ticketTypes: group.ticketTypes.filter(t => t.id !== typeId) };
+            }
+            return group;
+        }));
+    };
+
+    const updateTicketType = (groupId: string, typeId: string, field: keyof TicketType, value: any) => {
+        setTicketGroups(ticketGroups.map(group => {
+            if (group.id === groupId) {
+                return {
+                    ...group,
+                    ticketTypes: group.ticketTypes.map(type =>
+                        type.id === typeId ? { ...type, [field]: value } : type
+                    )
+                };
+            }
+            return group;
+        }));
     };
 
     const validateForm = (): boolean => {
@@ -84,10 +381,14 @@ export default function NewEventPage() {
             setError('O horário do evento é obrigatório');
             return false;
         }
+        if (!formData.location.trim()) {
+            setError('O local do evento é obrigatório');
+            return false;
+        }
         return true;
     };
 
-    const handleSubmit = async (e: FormEvent, status: 'draft' | 'published') => {
+    const handleSubmit = async (e: FormEvent) => {
         e.preventDefault();
         setError(null);
 
@@ -111,66 +412,280 @@ export default function NewEventPage() {
                 throw new Error('Organização não encontrada');
             }
 
-            // Upload image if selected
-            let imageUrl = null;
+            // Handle image upload/removal
+            let imageUrl: string | null = null;
             if (coverImage) {
+                // New image uploaded
                 const uploadResult = await uploadImage(coverImage);
                 if (uploadResult.error) {
                     throw new Error(uploadResult.error);
                 }
                 imageUrl = uploadResult.url;
+            } else if (existingImageUrl) {
+                // Keep existing image
+                imageUrl = existingImageUrl;
             }
-
-            // Combine date and time
-            const eventDateTime = new Date(`${formData.date}T${formData.time}`);
+            // If both are null, imageUrl stays null (image was removed)
 
             // Prepare event data
             const eventData: any = {
-                organization_id: memberData.organization_id,
-                user_id: user.id,
                 name: formData.title,
                 description: formData.description || null,
                 category: formData.category || null,
-                status: status === 'draft' ? 'rascunho' : 'publicado',
+                status: formData.status || 'rascunho',
                 event_date: formData.date,
                 event_time: formData.time,
                 end_date: formData.endDate || null,
                 end_time: formData.endTime || null,
-                duration: formData.duration ? parseInt(formData.duration) : null,
-                location: formData.location || null,
+                location: formData.location.trim() || '',
                 address: formData.address || null,
                 address_notes: formData.addressNotes || null,
                 image_url: imageUrl,
-                price: formData.ticketPrice ? parseFloat(formData.ticketPrice) : null,
-                capacity: formData.maxAttendees ? parseInt(formData.maxAttendees) : null,
                 allow_waitlist: formData.allowWaitlist,
                 tags: formData.tags ? formData.tags.split(',').map((tag: string) => tag.trim()) : null,
-                event_url: formData.eventUrl || null,
                 send_reminder: formData.sendReminder,
-                created_by: user.id
+                form_id: formData.formId || null,
+                require_form: formData.requireForm,
             };
 
-            // Insert event
-            const { data: newEvent, error: insertError } = await supabase
-                .from('events')
-                .insert([eventData])
-                .select()
-                .single();
+            let currentEventId = eventId;
 
-            if (insertError) {
-                console.error('Insert error:', insertError);
-                throw new Error('Erro ao criar evento');
+            if (isEditMode && eventId) {
+                // Update existing event
+                const { data: updatedEvent, error: updateError } = await supabase
+                    .from('events')
+                    .update(eventData)
+                    .eq('id', eventId)
+                    .eq('organization_id', memberData.organization_id)
+                    .select()
+                    .single();
+
+                if (updateError) {
+                    console.error('Update error:', updateError);
+                    throw new Error('Erro ao atualizar evento');
+                }
+
+                currentEventId = updatedEvent.id;
+            } else {
+                // Create new event
+                eventData.organization_id = memberData.organization_id;
+                eventData.user_id = user.id;
+                eventData.created_by = user.id;
+
+                const { data: newEvent, error: insertError } = await supabase
+                    .from('events')
+                    .insert([eventData])
+                    .select()
+                    .single();
+
+                if (insertError) {
+                    console.error('Insert error:', insertError);
+                    throw new Error('Erro ao criar evento');
+                }
+
+                currentEventId = newEvent.id;
+            }
+
+            // Handle ticket groups and types
+            if (isEditMode && eventId) {
+                // Get existing groups to compare
+                const { data: existingGroups } = await supabase
+                    .from('event_ticket_groups')
+                    .select('id')
+                    .eq('event_id', eventId);
+
+                const existingGroupIds = new Set((existingGroups || []).map(g => g.id));
+
+                // Delete groups that were removed
+                const currentGroupIds = ticketGroups
+                    .filter(g => !g.id.startsWith('temp-'))
+                    .map(g => g.id);
+                
+                const groupsToDelete = Array.from(existingGroupIds).filter(id => !currentGroupIds.includes(id));
+                if (groupsToDelete.length > 0) {
+                    await supabase
+                        .from('event_ticket_groups')
+                        .delete()
+                        .in('id', groupsToDelete);
+                }
+            }
+
+            // Process ticket groups
+            for (const group of ticketGroups) {
+                if (!group.name.trim()) continue; // Skip empty groups
+
+                let groupId = group.id;
+
+                if (group.id.startsWith('temp-')) {
+                    // New group - create it
+                    const { data: newGroup, error: groupError } = await supabase
+                        .from('event_ticket_groups')
+                        .insert([{
+                            event_id: currentEventId,
+                            organization_id: memberData.organization_id,
+                            name: group.name,
+                            description: group.description || null,
+                            order_index: group.orderIndex,
+                            is_active: group.isActive
+                        }])
+                        .select()
+                        .single();
+
+                    if (groupError) {
+                        console.error('Error creating ticket group:', groupError);
+                        continue;
+                    }
+                    groupId = newGroup.id;
+                } else {
+                    // Existing group - update it
+                    const { error: updateError } = await supabase
+                        .from('event_ticket_groups')
+                        .update({
+                            name: group.name,
+                            description: group.description || null,
+                            order_index: group.orderIndex,
+                            is_active: group.isActive
+                        })
+                        .eq('id', group.id);
+
+                    if (updateError) {
+                        console.error('Error updating ticket group:', updateError);
+                        continue;
+                    }
+                }
+
+                // Handle ticket types for this group
+                if (isEditMode && groupId && !group.id.startsWith('temp-')) {
+                    // Get existing types
+                    const { data: existingTypes } = await supabase
+                        .from('event_ticket_types')
+                        .select('id')
+                        .eq('group_id', groupId);
+
+                    const existingTypeIds = new Set((existingTypes || []).map(t => t.id));
+                    const currentTypeIds = group.ticketTypes
+                        .filter(t => !t.id.startsWith('temp-'))
+                        .map(t => t.id);
+
+                    // Delete removed types
+                    const typesToDelete = Array.from(existingTypeIds).filter(id => !currentTypeIds.includes(id));
+                    if (typesToDelete.length > 0) {
+                        await supabase
+                            .from('event_ticket_types')
+                            .delete()
+                            .in('id', typesToDelete);
+                    }
+                }
+
+                // Process each ticket type
+                for (const type of group.ticketTypes) {
+                    if (!type.name.trim()) continue;
+
+                    if (type.id.startsWith('temp-')) {
+                        // New type - create it
+                        const { error: typeError } = await supabase
+                            .from('event_ticket_types')
+                            .insert([{
+                                event_id: currentEventId,
+                                organization_id: memberData.organization_id,
+                                group_id: groupId,
+                                name: type.name,
+                                description: type.description || null,
+                                price: parseFloat(type.price) || 0,
+                                quantity_available: parseInt(type.quantityAvailable) || 0,
+                                start_sale: type.startSale ? new Date(type.startSale).toISOString() : null,
+                                end_sale: type.endSale ? new Date(type.endSale).toISOString() : null,
+                                is_active: type.isActive
+                            }]);
+
+                        if (typeError) {
+                            console.error('Error creating ticket type:', typeError);
+                        }
+                    } else {
+                        // Existing type - update it
+                        const { error: updateError } = await supabase
+                            .from('event_ticket_types')
+                            .update({
+                                name: type.name,
+                                description: type.description || null,
+                                price: parseFloat(type.price) || 0,
+                                quantity_available: parseInt(type.quantityAvailable) || 0,
+                                start_sale: type.startSale ? new Date(type.startSale).toISOString() : null,
+                                end_sale: type.endSale ? new Date(type.endSale).toISOString() : null,
+                                is_active: type.isActive
+                            })
+                            .eq('id', type.id);
+
+                        if (updateError) {
+                            console.error('Error updating ticket type:', updateError);
+                        }
+                    }
+                }
+            }
+
+            // Handle form association
+            if (formData.formId) {
+                if (isEditMode && eventId) {
+                    // Check if relation already exists
+                    const { data: existingRelation } = await supabase
+                        .from('event_forms')
+                        .select('id')
+                        .eq('event_id', currentEventId)
+                        .single();
+
+                    if (existingRelation) {
+                        // Update existing relation
+                        await supabase
+                            .from('event_forms')
+                            .update({ form_id: formData.formId })
+                            .eq('event_id', currentEventId);
+                    } else {
+                        // Create new relation
+                        await supabase
+                            .from('event_forms')
+                            .insert([{
+                                event_id: currentEventId,
+                                form_id: formData.formId
+                            }]);
+                    }
+                } else {
+                    // Create new relation for new event
+                    await supabase
+                        .from('event_forms')
+                        .insert([{
+                            event_id: currentEventId,
+                            form_id: formData.formId
+                        }]);
+                }
+            } else {
+                // Remove form association if form was unselected
+                if (isEditMode && eventId) {
+                    await supabase
+                        .from('event_forms')
+                        .delete()
+                        .eq('event_id', currentEventId);
+                }
             }
 
             // Redirect to events list
             router.push('/dashboard/events');
         } catch (err: any) {
-            console.error('Error creating event:', err);
-            setError(err.message || 'Erro ao criar evento');
+            console.error(`Error ${isEditMode ? 'updating' : 'creating'} event:`, err);
+            setError(err.message || `Erro ao ${isEditMode ? 'atualizar' : 'criar'} evento`);
         } finally {
             setLoading(false);
         }
     };
+
+    if (loadingData) {
+        return (
+            <div className={styles.container}>
+                <div style={{ textAlign: 'center', padding: '2rem' }}>
+                    <p>Carregando dados do evento...</p>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className={styles.container}>
@@ -186,8 +701,12 @@ export default function NewEventPage() {
                     Voltar
                 </button>
                 <div>
-                    <h1 className={styles.title}>Criar Novo Evento</h1>
-                    <p className={styles.subtitle}>Preencha as informações do seu evento</p>
+                    <h1 className={styles.title}>
+                        {isEditMode ? 'Editar Evento' : 'Criar Novo Evento'}
+                    </h1>
+                    <p className={styles.subtitle}>
+                        {isEditMode ? 'Atualize as informações do seu evento' : 'Preencha as informações do seu evento'}
+                    </p>
                 </div>
             </div>
 
@@ -303,25 +822,8 @@ export default function NewEventPage() {
                             </div>
 
                             <div className={styles.formGroup}>
-                                <label htmlFor="duration" className={styles.label}>
-                                    Duração (em minutos)
-                                </label>
-                                <input
-                                    type="number"
-                                    id="duration"
-                                    name="duration"
-                                    value={formData.duration}
-                                    onChange={handleInputChange}
-                                    className={styles.input}
-                                    placeholder="Ex: 120"
-                                    min="1"
-                                />
-                                <p className={styles.hint}>Duração estimada do evento em minutos</p>
-                            </div>
-
-                            <div className={styles.formGroup}>
                                 <label htmlFor="location" className={styles.label}>
-                                    Local
+                                    Local *
                                 </label>
                                 <input
                                     type="text"
@@ -331,6 +833,7 @@ export default function NewEventPage() {
                                     onChange={handleInputChange}
                                     className={styles.input}
                                     placeholder="Ex: Igreja Central"
+                                    required
                                 />
                             </div>
 
@@ -362,22 +865,6 @@ export default function NewEventPage() {
                                     rows={2}
                                     placeholder="Ex: Próximo ao supermercado, estacionamento disponível..."
                                 />
-                            </div>
-
-                            <div className={styles.formGroup}>
-                                <label htmlFor="eventUrl" className={styles.label}>
-                                    URL do Evento
-                                </label>
-                                <input
-                                    type="url"
-                                    id="eventUrl"
-                                    name="eventUrl"
-                                    value={formData.eventUrl}
-                                    onChange={handleInputChange}
-                                    className={styles.input}
-                                    placeholder="https://exemplo.com/meu-evento"
-                                />
-                                <p className={styles.hint}>Link externo para mais informações (opcional)</p>
                             </div>
 
                             <div className={styles.formGroup}>
@@ -419,56 +906,63 @@ export default function NewEventPage() {
                                 </div>
 
                                 <div className={styles.formGroup}>
-                                    <label htmlFor="maxAttendees" className={styles.label}>
-                                        Capacidade Máxima
+                                    <label htmlFor="status" className={styles.label}>
+                                        Status
                                     </label>
-                                    <input
-                                        type="number"
-                                        id="maxAttendees"
-                                        name="maxAttendees"
-                                        value={formData.maxAttendees}
+                                    <select
+                                        id="status"
+                                        name="status"
+                                        value={formData.status}
                                         onChange={handleInputChange}
-                                        className={styles.input}
-                                        placeholder="Ex: 100"
-                                        min="1"
-                                    />
+                                        className={styles.select}
+                                    >
+                                        <option value="rascunho">Rascunho</option>
+                                        <option value="publicado">Publicado</option>
+                                        <option value="ativo">Ativo</option>
+                                        <option value="cancelado">Cancelado</option>
+                                        <option value="finalizado">Finalizado</option>
+                                        <option value="arquivado">Arquivado</option>
+                                    </select>
                                 </div>
                             </div>
 
                             <div className={styles.formGroup}>
-                                <label htmlFor="ticketPrice" className={styles.label}>
-                                    Preço do Ingresso (R$)
+                                <label htmlFor="formId" className={styles.label}>
+                                    Formulário Associado
                                 </label>
-                                <input
-                                    type="number"
-                                    id="ticketPrice"
-                                    name="ticketPrice"
-                                    value={formData.ticketPrice}
+                                <select
+                                    id="formId"
+                                    name="formId"
+                                    value={formData.formId}
                                     onChange={handleInputChange}
-                                    className={styles.input}
-                                    placeholder="0.00"
-                                    min="0"
-                                    step="0.01"
-                                />
-                                <p className={styles.hint}>Deixe em branco para eventos gratuitos</p>
+                                    className={styles.select}
+                                >
+                                    <option value="">Nenhum formulário</option>
+                                    {availableForms.map((form) => (
+                                        <option key={form.id} value={form.id}>
+                                            {form.name}
+                                        </option>
+                                    ))}
+                                </select>
+                                <p className={styles.hint}>
+                                    Selecione um formulário para coletar informações adicionais dos participantes
+                                </p>
                             </div>
 
-                            <div className={styles.formGroup}>
-                                <label htmlFor="totalTickets" className={styles.label}>
-                                    Total de Ingressos Disponíveis
-                                </label>
-                                <input
-                                    type="number"
-                                    id="totalTickets"
-                                    name="totalTickets"
-                                    value={formData.totalTickets}
-                                    onChange={handleInputChange}
-                                    className={styles.input}
-                                    placeholder="Ex: 200"
-                                    min="1"
-                                />
-                                <p className={styles.hint}>Quantidade total de ingressos para venda</p>
-                            </div>
+                            {formData.formId && (
+                                <div className={styles.formGroup}>
+                                    <label className={styles.checkboxLabel}>
+                                        <input
+                                            type="checkbox"
+                                            name="requireForm"
+                                            checked={formData.requireForm}
+                                            onChange={handleInputChange}
+                                            className={styles.checkbox}
+                                        />
+                                        <span>Obrigar preenchimento do formulário para participar</span>
+                                    </label>
+                                </div>
+                            )}
 
                             <div className={styles.formGroup}>
                                 <label className={styles.checkboxLabel}>
@@ -496,6 +990,307 @@ export default function NewEventPage() {
                                 </label>
                             </div>
                         </div>
+
+                        {/* Ticket Configuration Section */}
+                        <div className={styles.section}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+                                <h2 className={styles.sectionTitle}>Configuração de Ingressos</h2>
+                                <button
+                                    type="button"
+                                    onClick={addTicketGroup}
+                                    className={styles.addButton}
+                                    style={{
+                                        padding: '0.5rem 1rem',
+                                        background: 'linear-gradient(135deg, #4A90E2 0%, #357ABD 100%)',
+                                        color: 'white',
+                                        border: 'none',
+                                        borderRadius: '6px',
+                                        cursor: 'pointer',
+                                        fontSize: '0.875rem',
+                                        fontWeight: '500',
+                                        transition: 'all 0.2s ease'
+                                    }}
+                                >
+                                    + Adicionar Grupo
+                                </button>
+                            </div>
+
+                            {ticketGroups.length === 0 ? (
+                                <div style={{
+                                    padding: '2rem',
+                                    textAlign: 'center',
+                                    background: '#f9fafb',
+                                    borderRadius: '8px',
+                                    color: '#6b7280'
+                                }}>
+                                    <p>Nenhum grupo de ingressos configurado</p>
+                                    <p style={{ fontSize: '0.875rem', marginTop: '0.5rem' }}>
+                                        Adicione grupos para organizar seus ingressos (ex: Masculino, Feminino, Mesas)
+                                    </p>
+                                </div>
+                            ) : (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                                    {ticketGroups.map((group, groupIndex) => (
+                                        <div
+                                            key={group.id}
+                                            style={{
+                                                border: '1px solid #e5e7eb',
+                                                borderRadius: '8px',
+                                                padding: '1.5rem',
+                                                background: '#ffffff'
+                                            }}
+                                        >
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem' }}>
+                                                <div style={{ flex: 1 }}>
+                                                    <input
+                                                        type="text"
+                                                        placeholder="Nome do Grupo (ex: Ingresso Masculino)"
+                                                        value={group.name}
+                                                        onChange={(e) => updateTicketGroup(group.id, 'name', e.target.value)}
+                                                        style={{
+                                                            width: '100%',
+                                                            padding: '0.75rem',
+                                                            border: '1px solid #d1d5db',
+                                                            borderRadius: '6px',
+                                                            fontSize: '1rem',
+                                                            marginBottom: '0.5rem',
+                                                            color: '#111827'
+                                                        }}
+                                                    />
+                                                    <textarea
+                                                        placeholder="Descrição do grupo (opcional)"
+                                                        value={group.description}
+                                                        onChange={(e) => updateTicketGroup(group.id, 'description', e.target.value)}
+                                                        rows={2}
+                                                        style={{
+                                                            width: '100%',
+                                                            padding: '0.75rem',
+                                                            border: '1px solid #d1d5db',
+                                                            borderRadius: '6px',
+                                                            fontSize: '0.875rem',
+                                                            resize: 'vertical',
+                                                            color: '#111827'
+                                                        }}
+                                                    />
+                                                </div>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => removeTicketGroup(group.id)}
+                                                    style={{
+                                                        marginLeft: '1rem',
+                                                        padding: '0.5rem',
+                                                        background: '#ef4444',
+                                                        color: 'white',
+                                                        border: 'none',
+                                                        borderRadius: '6px',
+                                                        cursor: 'pointer',
+                                                        fontSize: '0.875rem',
+                                                        transition: 'all 0.2s ease'
+                                                    }}
+                                                >
+                                                    Remover
+                                                </button>
+                                            </div>
+
+                                            <div style={{ marginBottom: '1rem' }}>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => addTicketType(group.id)}
+                                                    style={{
+                                                        padding: '0.5rem 1rem',
+                                                        background: '#4A90E2',
+                                                        color: 'white',
+                                                        border: 'none',
+                                                        borderRadius: '6px',
+                                                        cursor: 'pointer',
+                                                        fontSize: '0.875rem',
+                                                        fontWeight: '500',
+                                                        transition: 'all 0.2s ease'
+                                                    }}
+                                                >
+                                                    + Adicionar Tipo de Ingresso
+                                                </button>
+                                            </div>
+
+                                            {group.ticketTypes.length > 0 && (
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginTop: '1rem' }}>
+                                                    {group.ticketTypes.map((type) => (
+                                                        <div
+                                                            key={type.id}
+                                                            style={{
+                                                                border: '1px solid #e5e7eb',
+                                                                borderRadius: '6px',
+                                                                padding: '1rem',
+                                                                background: '#f9fafb'
+                                                            }}
+                                                        >
+                                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.75rem' }}>
+                                                                <h4 style={{ margin: 0, fontSize: '0.875rem', fontWeight: '600', color: '#111827' }}>
+                                                                    Tipo de Ingresso
+                                                                </h4>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => removeTicketType(group.id, type.id)}
+                                                                    style={{
+                                                                        padding: '0.25rem 0.5rem',
+                                                                        background: '#ef4444',
+                                                                        color: 'white',
+                                                                        border: 'none',
+                                                                        borderRadius: '4px',
+                                                                        cursor: 'pointer',
+                                                                        fontSize: '0.75rem',
+                                                                        transition: 'all 0.2s ease'
+                                                                    }}
+                                                                >
+                                                                    Remover
+                                                                </button>
+                                                            </div>
+
+                                                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '0.75rem' }}>
+                                                                <div>
+                                                                    <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', marginBottom: '0.25rem', color: '#374151' }}>
+                                                                        Nome *
+                                                                    </label>
+                                                                    <input
+                                                                        type="text"
+                                                                        placeholder="Ex: Vip Lote 2"
+                                                                        value={type.name}
+                                                                        onChange={(e) => updateTicketType(group.id, type.id, 'name', e.target.value)}
+                                                                        style={{
+                                                                            width: '100%',
+                                                                            padding: '0.5rem',
+                                                                            border: '1px solid #d1d5db',
+                                                                            color: '#111827',
+                                                                            borderRadius: '4px',
+                                                                            fontSize: '0.875rem'
+                                                                        }}
+                                                                    />
+                                                                </div>
+                                                                <div>
+                                                                    <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', marginBottom: '0.25rem', color: '#374151' }}>
+                                                                        Preço (R$)
+                                                                    </label>
+                                                                    <input
+                                                                        type="text"
+                                                                        placeholder="R$ 0,00"
+                                                                        value={formatBRL(type.price)}
+                                                                        onChange={(e) => handlePriceChange(group.id, type.id, e.target.value)}
+                                                                        style={{
+                                                                            width: '100%',
+                                                                            padding: '0.5rem',
+                                                                            border: '1px solid #d1d5db',
+                                                                            color: '#111827',
+                                                                            borderRadius: '4px',
+                                                                            fontSize: '0.875rem'
+                                                                        }}
+                                                                    />
+                                                                </div>
+                                                            </div>
+
+                                                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '0.75rem' }}>
+                                                                <div>
+                                                                    <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', marginBottom: '0.25rem', color: '#374151' }}>
+                                                                        Quantidade Disponível
+                                                                    </label>
+                                                                    <input
+                                                                        type="number"
+                                                                        placeholder="Ex: 200"
+                                                                        value={type.quantityAvailable}
+                                                                        onChange={(e) => updateTicketType(group.id, type.id, 'quantityAvailable', e.target.value)}
+                                                                        min="0"
+                                                                        style={{
+                                                                            width: '100%',
+                                                                            padding: '0.5rem',
+                                                                            border: '1px solid #d1d5db',
+                                                                            color: '#111827',
+                                                                            borderRadius: '4px',
+                                                                            fontSize: '0.875rem'
+                                                                        }}
+                                                                    />
+                                                                </div>
+                                                                <div>
+                                                                    <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', marginBottom: '0.25rem', color: '#374151' }}>
+                                                                        Ativo
+                                                                    </label>
+                                                                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+                                                                        <input
+                                                                            type="checkbox"
+                                                                            checked={type.isActive}
+                                                                            onChange={(e) => updateTicketType(group.id, type.id, 'isActive', e.target.checked)}
+                                                                            style={{ cursor: 'pointer' }}
+                                                                        />
+                                                                        <span style={{ fontSize: '0.875rem' }}>Ativo para venda</span>
+                                                                    </label>
+                                                                </div>
+                                                            </div>
+
+                                                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+                                                                <div>
+                                                                    <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', marginBottom: '0.25rem', color: '#374151' }}>
+                                                                        Início da Venda
+                                                                    </label>
+                                                                    <input
+                                                                        type="datetime-local"
+                                                                        value={type.startSale}
+                                                                        onChange={(e) => updateTicketType(group.id, type.id, 'startSale', e.target.value)}
+                                                                        style={{
+                                                                            width: '100%',
+                                                                            padding: '0.5rem',
+                                                                            border: '1px solid #d1d5db',
+                                                                            color: '#111827',
+                                                                            borderRadius: '4px',
+                                                                            fontSize: '0.875rem'
+                                                                        }}
+                                                                    />
+                                                                </div>
+                                                                <div>
+                                                                    <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', marginBottom: '0.25rem', color: '#374151' }}>
+                                                                        Fim da Venda
+                                                                    </label>
+                                                                    <input
+                                                                        type="datetime-local"
+                                                                        value={type.endSale}
+                                                                        onChange={(e) => updateTicketType(group.id, type.id, 'endSale', e.target.value)}
+                                                                        style={{
+                                                                            width: '100%',
+                                                                            padding: '0.5rem',
+                                                                            border: '1px solid #d1d5db',
+                                                                            color: '#111827',
+                                                                            borderRadius: '4px',
+                                                                            fontSize: '0.875rem'
+                                                                        }}
+                                                                    />
+                                                                </div>
+                                                            </div>
+
+                                                            <div style={{ marginTop: '0.75rem' }}>
+                                                                <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', marginBottom: '0.25rem', color: '#555' }}>
+                                                                    Descrição (opcional)
+                                                                </label>
+                                                                <textarea
+                                                                    placeholder="Descrição do tipo de ingresso"
+                                                                    value={type.description}
+                                                                    onChange={(e) => updateTicketType(group.id, type.id, 'description', e.target.value)}
+                                                                    rows={2}
+                                                                    style={{
+                                                                        width: '100%',
+                                                                        padding: '0.5rem',
+                                                                        border: '1px solid #ddd',
+                                                                        borderRadius: '4px',
+                                                                        fontSize: '0.875rem',
+                                                                        resize: 'vertical'
+                                                                    }}
+                                                                />
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
                     </div>
 
                     {/* Right Column - Image Upload */}
@@ -504,6 +1299,8 @@ export default function NewEventPage() {
                             <h2 className={styles.sectionTitle}>Imagem de Capa</h2>
                             <ImageUpload
                                 onImageSelect={handleImageSelect}
+                                onImageRemove={handleImageRemove}
+                                currentImage={existingImageUrl || undefined}
                                 label=""
                                 maxSizeMB={5}
                             />
@@ -516,12 +1313,12 @@ export default function NewEventPage() {
                         <div className={styles.section}>
                             <h2 className={styles.sectionTitle}>Preview</h2>
                             <div className={styles.previewCard}>
-                                {coverImage || formData.title ? (
+                                {(coverImage || existingImageUrl || formData.title) ? (
                                     <>
-                                        {coverImage && (
+                                        {(coverImage || existingImageUrl) && (
                                             <div className={styles.previewImage}>
                                                 <img
-                                                    src={URL.createObjectURL(coverImage)}
+                                                    src={coverImage ? URL.createObjectURL(coverImage) : (existingImageUrl || '')}
                                                     alt="Preview"
                                                 />
                                             </div>
@@ -563,19 +1360,11 @@ export default function NewEventPage() {
                 <div className={styles.actions}>
                     <button
                         type="button"
-                        onClick={(e) => handleSubmit(e, 'draft')}
-                        className={styles.draftBtn}
-                        disabled={loading}
-                    >
-                        {loading ? 'Salvando...' : 'Salvar como Rascunho'}
-                    </button>
-                    <button
-                        type="button"
-                        onClick={(e) => handleSubmit(e, 'published')}
+                        onClick={handleSubmit}
                         className={styles.publishBtn}
-                        disabled={loading}
+                        disabled={loading || loadingData}
                     >
-                        {loading ? 'Publicando...' : 'Publicar Evento'}
+                        {loading ? (isEditMode ? 'Atualizando...' : 'Salvando...') : (isEditMode ? 'Atualizar Evento' : 'Salvar Evento')}
                     </button>
                 </div>
             </form>

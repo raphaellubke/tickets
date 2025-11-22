@@ -1,18 +1,27 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { createClient } from '@/lib/supabase/client';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import styles from './page.module.css';
 
-export default function LoginPage() {
+function LoginPageContent() {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const router = useRouter();
+    const searchParams = useSearchParams();
     const supabase = createClient();
+
+    // Pre-fill email from invite link
+    useEffect(() => {
+        const inviteEmail = searchParams.get('email');
+        if (inviteEmail) {
+            setEmail(decodeURIComponent(inviteEmail));
+        }
+    }, [searchParams]);
 
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -28,7 +37,18 @@ export default function LoginPage() {
             if (error) {
                 setError(error.message);
             } else {
-                router.push('/dashboard');
+                // Check if there's a pending invite
+                const pendingInvite = sessionStorage.getItem('pendingInvite');
+                const redirectUrl = searchParams.get('redirect');
+                
+                if (redirectUrl) {
+                    router.push(redirectUrl);
+                } else if (pendingInvite) {
+                    const inviteData = JSON.parse(pendingInvite);
+                    router.push(`/invite/${inviteData.token}?org=${inviteData.orgId}&role=${inviteData.role}${inviteData.email ? `&email=${encodeURIComponent(inviteData.email)}` : ''}`);
+                } else {
+                    router.push('/dashboard');
+                }
                 router.refresh();
             }
         } catch (err) {
@@ -82,9 +102,23 @@ export default function LoginPage() {
                 </form>
 
                 <div className={styles.footer}>
-                    <p>Não tem uma conta? <Link href="/signup" className={styles.link}>Cadastre-se</Link></p>
+                    <p>Não tem uma conta? <Link href={`/signup${searchParams.toString() ? `?${searchParams.toString()}` : ''}`} className={styles.link}>Cadastre-se</Link></p>
                 </div>
             </div>
         </div>
+    );
+}
+
+export default function LoginPage() {
+    return (
+        <Suspense fallback={
+            <div className={styles.container}>
+                <div className={styles.card}>
+                    <p>Carregando...</p>
+                </div>
+            </div>
+        }>
+            <LoginPageContent />
+        </Suspense>
     );
 }

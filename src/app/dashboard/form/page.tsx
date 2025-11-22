@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/context/AuthContext';
 import styles from './page.module.css';
@@ -117,10 +118,10 @@ export default function FormsPage() {
                     <h1 className={styles.pageTitle}>Formulários</h1>
                     <p className={styles.pageSubtitle}>Crie e gerencie formulários de inscrição personalizados</p>
                 </div>
-                <button className={styles.primaryBtn}>
+                <Link href="/dashboard/form/new" className={styles.primaryBtn}>
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
                     Novo Formulário
-                </button>
+                </Link>
             </div>
 
             {/* Stats Overview */}
@@ -179,18 +180,20 @@ export default function FormsPage() {
                                 }`}>
                                 {getStatusLabel(form.status)}
                             </span>
-                            <button className={styles.actionLink}>Ver Respostas →</button>
+                            <Link href={`/dashboard/form/new?id=${form.id}`} className={styles.actionLink}>
+                                Editar →
+                            </Link>
                         </div>
                     </div>
                 ))}
 
                 {/* Create New Card Placeholder */}
-                <button className={styles.createCard}>
+                <Link href="/dashboard/form/new" className={styles.createCard}>
                     <div className={styles.createIcon}>
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
                     </div>
                     <span className={styles.createText}>Criar Novo Formulário</span>
-                </button>
+                </Link>
             </div>
         </div>
     );

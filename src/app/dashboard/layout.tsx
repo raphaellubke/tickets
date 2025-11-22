@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { createClient } from '@/lib/supabase/client';
 import CreateOrganizationModal from '@/components/CreateOrganizationModal/CreateOrganizationModal';
+import InviteMemberModal from '@/components/InviteMemberModal/InviteMemberModal';
 import styles from './layout.module.css';
 
 export default function DashboardLayout({
@@ -16,10 +17,13 @@ export default function DashboardLayout({
     const pathname = usePathname();
     const { user, signOut } = useAuth();
     const [hasOrganization, setHasOrganization] = useState<boolean | null>(null);
+    const [organization, setOrganization] = useState<{ name: string; logo_url?: string | null } | null>(null);
+    const [userRole, setUserRole] = useState<string>('');
     const [loading, setLoading] = useState(true);
+    const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
     const supabase = createClient();
 
-    // Check if user has an organization
+    // Check if user has an organization and load organization data
     useEffect(() => {
         async function checkOrganization() {
             if (!user) {
@@ -30,12 +34,31 @@ export default function DashboardLayout({
             try {
                 const { data, error } = await supabase
                     .from('organization_members')
-                    .select('id, organization_id')
+                    .select('id, organization_id, role')
                     .eq('user_id', user.id)
                     .eq('status', 'active')
                     .single();
 
-                setHasOrganization(!!data && !error);
+                if (data && !error) {
+                    setHasOrganization(true);
+                    setUserRole(data.role || 'member');
+
+                    // Load organization details
+                    const { data: orgData, error: orgError } = await supabase
+                        .from('organizations')
+                        .select('name, logo_url')
+                        .eq('id', data.organization_id)
+                        .single();
+
+                    if (!orgError && orgData) {
+                        setOrganization({
+                            name: orgData.name,
+                            logo_url: orgData.logo_url
+                        });
+                    }
+                } else {
+                    setHasOrganization(false);
+                }
             } catch (err) {
                 setHasOrganization(false);
             } finally {
@@ -96,10 +119,27 @@ export default function DashboardLayout({
             <aside className={styles.sidebar}>
                 <div className={styles.sidebarHeader}>
                     <div className={styles.orgSwitcher}>
-                        <div className={styles.orgIcon}>D</div>
+                        {organization?.logo_url ? (
+                            <img 
+                                src={organization.logo_url} 
+                                alt={organization.name}
+                                className={styles.orgLogo}
+                            />
+                        ) : (
+                            <div className={styles.orgIcon}>
+                                {organization?.name?.[0]?.toUpperCase() || 'D'}
+                            </div>
+                        )}
                         <div className={styles.orgInfo}>
-                            <span className={styles.orgName}>DivineTickets</span>
-                            <span className={styles.orgRole}>Organização</span>
+                            <span className={styles.orgName}>
+                                {organization?.name || 'DivineTickets'}
+                            </span>
+                            <span className={styles.orgRole}>
+                                {userRole === 'owner' ? 'Proprietário' : 
+                                 userRole === 'admin' ? 'Administrador' : 
+                                 userRole === 'member' ? 'Membro' : 
+                                 userRole === 'viewer' ? 'Visualizador' : 'Organização'}
+                            </span>
                         </div>
                         <svg className={styles.chevron} width="16" height="16" viewBox="0 0 16 16" fill="none">
                             <path d="M4 6L8 10L12 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
@@ -125,16 +165,32 @@ export default function DashboardLayout({
                     <div className={styles.navSpacer} />
 
                     <div className={styles.navSection}>
-                        {bottomNavItems.map((item) => (
-                            <Link
-                                key={item.href}
-                                href={item.href}
-                                className={`${styles.navItem} ${isActive(item.href) ? styles.active : ''}`}
-                            >
-                                {renderIcon(item.icon)}
-                                {item.label}
-                            </Link>
-                        ))}
+                        {bottomNavItems.map((item) => {
+                            // Special handling for "Convidar Membros" - open modal instead of navigating
+                            if (item.label === 'Convidar Membros') {
+                                return (
+                                    <button
+                                        key={item.href}
+                                        onClick={() => setIsInviteModalOpen(true)}
+                                        className={styles.navItem}
+                                    >
+                                        {renderIcon(item.icon)}
+                                        {item.label}
+                                    </button>
+                                );
+                            }
+                            
+                            return (
+                                <Link
+                                    key={item.href}
+                                    href={item.href}
+                                    className={`${styles.navItem} ${isActive(item.href) ? styles.active : ''}`}
+                                >
+                                    {renderIcon(item.icon)}
+                                    {item.label}
+                                </Link>
+                            );
+                        })}
                     </div>
                 </nav>
 
@@ -194,6 +250,19 @@ export default function DashboardLayout({
             {hasOrganization === false && (
                 <CreateOrganizationModal onSuccess={handleOrganizationCreated} />
             )}
+
+            {/* Invite Member Modal */}
+            <InviteMemberModal
+                isOpen={isInviteModalOpen}
+                onClose={() => setIsInviteModalOpen(false)}
+                onSuccess={() => {
+                    setIsInviteModalOpen(false);
+                    // Optionally refresh the page or update members list
+                    if (pathname === '/dashboard/members') {
+                        window.location.reload();
+                    }
+                }}
+            />
         </div>
     );
 }
