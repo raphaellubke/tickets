@@ -8,24 +8,29 @@ import styles from './page.module.css';
 
 interface Ticket {
     id: string;
-    ticket_code: string;
-    order_id: string;
+    ticket_code?: string;
+    order_id?: string;
     event_id: string;
-    ticket_type_id: string;
+    ticket_type_id?: string;
     status: string;
     price: number;
     created_at: string;
-    events: {
+    // Legacy fields
+    customer_name?: string;
+    customer_email?: string;
+    type?: string;
+    // Related data
+    events?: {
         name: string;
-    };
-    event_ticket_types: {
+    } | null;
+    event_ticket_types?: {
         name: string;
-    };
-    orders: {
+    } | null;
+    orders?: {
         participant_name: string;
         participant_email: string;
         order_number: string;
-    };
+    } | null;
 }
 
 export default function TicketsPage() {
@@ -64,10 +69,14 @@ export default function TicketsPage() {
                 // Fetch events for filter
                 const { data: eventsData } = await supabase
                     .from('events')
-                    .select('id, name')
+                    .select('id, name, title')
                     .eq('organization_id', memberData.organization_id);
 
-                setEvents(eventsData || []);
+                setEvents((eventsData || []).map(e => ({
+                    ...e,
+                    name: e.name || e.title,
+                    title: e.title || e.name
+                })));
 
                 // Fetch tickets with event, ticket type, and order info
                 // Only tickets from events of the user's organization
@@ -86,16 +95,62 @@ export default function TicketsPage() {
                 const eventIds = orgEvents.map(e => e.id);
 
                 // Fetch tickets from those events
-                // Fetch tickets and related data separately to avoid 404 errors
-                const { data: ticketsData, error: ticketsError } = await supabase
-                    .from('tickets')
-                    .select('*')
-                    .in('event_id', eventIds)
-                    .order('created_at', { ascending: false });
+                // Try to fetch with joins first, fallback to separate queries
+                let ticketsData: any[] = [];
+                let ticketsError: any = null;
+
+                // First, try to fetch with joins (if tables exist)
+                let ticketsWithJoins: any[] = [];
+                let joinError: any = null;
+
+                try {
+                    const result = await supabase
+                        .from('tickets')
+                        .select(`
+                            *,
+                            events:event_id(name, title),
+                            event_ticket_types:ticket_type_id(name),
+                            orders:order_id(participant_name, participant_email, order_number, event_id, user_id)
+                        `)
+                        .in('event_id', eventIds)
+                        .order('created_at', { ascending: false });
+
+                    ticketsWithJoins = result.data || [];
+                    joinError = result.error;
+                } catch (err) {
+                    console.log('Join query failed, using fallback:', err);
+                    joinError = err;
+                }
+
+                if (!joinError && ticketsWithJoins && ticketsWithJoins.length > 0) {
+                    // Successfully fetched with joins
+                    ticketsData = ticketsWithJoins.map((ticket: any) => ({
+                        ...ticket,
+                        events: ticket.events ? { name: ticket.events.name || ticket.events.title } : null,
+                        event_ticket_types: ticket.event_ticket_types || null,
+                        orders: ticket.orders || null
+                    }));
+                } else {
+                    // Fallback: fetch tickets separately
+                    const { data: ticketsOnly, error: ticketsOnlyError } = await supabase
+                        .from('tickets')
+                        .select('*')
+                        .in('event_id', eventIds)
+                        .order('created_at', { ascending: false });
+
+                    if (ticketsOnlyError) {
+                        console.error('Error fetching tickets:', ticketsOnlyError);
+                        ticketsError = ticketsOnlyError;
+                    } else {
+                        ticketsData = ticketsOnly || [];
+                    }
+                }
 
                 if (ticketsError) {
                     console.error('Error fetching tickets:', ticketsError);
-                    throw ticketsError;
+                    setTickets([]);
+                    setLoading(false);
+                    return;
                 }
 
                 if (!ticketsData || ticketsData.length === 0) {
@@ -104,16 +159,21 @@ export default function TicketsPage() {
                     return;
                 }
 
-                // Fetch related data separately
+                // If we didn't get joins, fetch related data separately
                 const ticketsWithDetails = await Promise.all(
                     ticketsData.map(async (ticket) => {
+                        // If already has joined data, return as is
+                        if (ticket.events || ticket.event_ticket_types || ticket.orders) {
+                            return ticket;
+                        }
+
                         // Fetch event
                         let event = null;
                         if (ticket.event_id) {
                             try {
                                 const { data: eventData } = await supabase
                                     .from('events')
-                                    .select('name')
+                                    .select('name, title')
                                     .eq('id', ticket.event_id)
                                     .single();
                                 event = eventData;
@@ -152,10 +212,23 @@ export default function TicketsPage() {
                             }
                         }
 
+                        // Handle legacy structure (customer_name, customer_email, type)
+                        if (!order && (ticket.customer_name || ticket.customer_email)) {
+                            order = {
+                                participant_name: ticket.customer_name || 'N/A',
+                                participant_email: ticket.customer_email || 'N/A',
+                                order_number: `#${ticket.id.substring(0, 8)}`
+                            };
+                        }
+
+                        if (!ticketType && ticket.type) {
+                            ticketType = { name: ticket.type };
+                        }
+
                         return {
                             ...ticket,
-                            events: event ? { name: event.name } : null,
-                            event_ticket_types: ticketType ? { name: ticketType.name } : null,
+                            events: event ? { name: event.name || event.title } : null,
+                            event_ticket_types: ticketType || null,
                             orders: order
                         };
                     })
@@ -178,6 +251,9 @@ export default function TicketsPage() {
             used: 'Utilizado',
             cancelled: 'Cancelado',
             refunded: 'Reembolsado',
+            // Legacy statuses
+            pending: 'Pendente',
+            paid: 'Pago',
         };
         return statusMap[status] || status;
     };
@@ -210,6 +286,8 @@ export default function TicketsPage() {
                     ticket.orders?.participant_name?.toLowerCase().includes(search) ||
                     ticket.orders?.participant_email?.toLowerCase().includes(search) ||
                     ticket.orders?.order_number?.toLowerCase().includes(search) ||
+                    ticket.customer_name?.toLowerCase().includes(search) ||
+                    ticket.customer_email?.toLowerCase().includes(search) ||
                     ticket.ticket_code?.toLowerCase().includes(search) ||
                     ticket.id.toLowerCase().includes(search)
                 );
@@ -221,11 +299,11 @@ export default function TicketsPage() {
     const todayTickets = tickets.filter(t => {
         const today = new Date().toDateString();
         const ticketDate = new Date(t.created_at).toDateString();
-        return today === ticketDate && (t.status === 'active' || t.status === 'used');
+        return today === ticketDate && (t.status === 'active' || t.status === 'used' || t.status === 'paid');
     });
 
     const todayRevenue = todayTickets.reduce((sum, t) => sum + (parseFloat(t.price?.toString() || '0') || 0), 0);
-    const totalSold = tickets.filter(t => t.status === 'active' || t.status === 'used').length;
+    const totalSold = tickets.filter(t => t.status === 'active' || t.status === 'used' || t.status === 'paid').length;
     const avgTicket = totalSold > 0 ? tickets.reduce((sum, t) => sum + (parseFloat(t.price?.toString() || '0') || 0), 0) / totalSold : 0;
 
     if (loading) {
@@ -337,31 +415,39 @@ export default function TicketsPage() {
                             filteredTickets.map((ticket) => (
                                 <tr key={ticket.id}>
                                     <td className={styles.orderId}>
-                                        {ticket.orders?.order_number || `#${ticket.id.substring(0, 8)}`}
+                                        {ticket.orders?.order_number || 
+                                         (ticket.order_id ? `#${ticket.order_id.substring(0, 8)}` : `#${ticket.id.substring(0, 8)}`)}
                                     </td>
                                     <td>
                                         <div className={styles.customerCell}>
                                             <div className={styles.avatar}>
-                                                {ticket.orders?.participant_name?.[0]?.toUpperCase() || 'U'}
+                                                {(ticket.orders?.participant_name || ticket.customer_name)?.[0]?.toUpperCase() || 'U'}
                                             </div>
                                             <div className={styles.customerInfo}>
                                                 <span className={styles.customerName}>
-                                                    {ticket.orders?.participant_name || 'N/A'}
+                                                    {ticket.orders?.participant_name || ticket.customer_name || 'N/A'}
                                                 </span>
                                                 <span className={styles.customerEmail}>
-                                                    {ticket.orders?.participant_email || 'N/A'}
+                                                    {ticket.orders?.participant_email || ticket.customer_email || 'N/A'}
                                                 </span>
                                             </div>
                                         </div>
                                     </td>
-                                    <td className={styles.eventCell}>{ticket.events?.name || 'N/A'}</td>
-                                    <td><span className={styles.ticketType}>{ticket.event_ticket_types?.name || 'N/A'}</span></td>
+                                    <td className={styles.eventCell}>
+                                        {ticket.events?.name || 
+                                         (ticket.event_id ? 'Carregando...' : 'N/A')}
+                                    </td>
+                                    <td>
+                                        <span className={styles.ticketType}>
+                                            {ticket.event_ticket_types?.name || ticket.type || 'N/A'}
+                                        </span>
+                                    </td>
                                     <td className={styles.priceCell}>
                                         {formatPrice(parseFloat(ticket.price?.toString() || '0'))}
                                     </td>
                                     <td>
                                         <span className={`${styles.badge} ${
-                                            ticket.status === 'active' ? styles.badgeSuccess :
+                                            ticket.status === 'active' || ticket.status === 'paid' ? styles.badgeSuccess :
                                             ticket.status === 'used' ? styles.badgeInfo :
                                             ticket.status === 'cancelled' || ticket.status === 'refunded' ? styles.badgeError :
                                             styles.badgeWarning
@@ -407,7 +493,8 @@ export default function TicketsPage() {
                                                         </svg>
                                                     ),
                                                     onClick: async () => {
-                                                        if (!confirm(`Tem certeza que deseja invalidar o ingresso ${ticket.ticket_code}?`)) {
+                                                        const ticketIdentifier = ticket.ticket_code || ticket.id.substring(0, 8);
+                                                        if (!confirm(`Tem certeza que deseja invalidar o ingresso ${ticketIdentifier}?`)) {
                                                             return;
                                                         }
                                                         try {
