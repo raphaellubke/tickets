@@ -40,7 +40,7 @@ export default function Header() {
                     </div>
 
                     <div className={styles.actions}>
-                        <Link href="/create-event" className={styles.createEvent}>
+                        <Link href="/dashboard" className={styles.createEvent}>
                             <span className={styles.createIcon}>+</span>
                             Crie seu evento
                         </Link>
