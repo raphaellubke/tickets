@@ -1,7 +1,11 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useAuth } from '@/context/AuthContext';
+import { createClient } from '@/lib/supabase/client';
+import CreateOrganizationModal from '@/components/CreateOrganizationModal/CreateOrganizationModal';
 import styles from './layout.module.css';
 
 export default function DashboardLayout({
@@ -10,6 +14,50 @@ export default function DashboardLayout({
     children: React.ReactNode;
 }) {
     const pathname = usePathname();
+    const { user, signOut } = useAuth();
+    const [hasOrganization, setHasOrganization] = useState<boolean | null>(null);
+    const [loading, setLoading] = useState(true);
+    const supabase = createClient();
+
+    // Check if user has an organization
+    useEffect(() => {
+        async function checkOrganization() {
+            if (!user) {
+                setLoading(false);
+                return;
+            }
+
+            try {
+                const { data, error } = await supabase
+                    .from('organization_members')
+                    .select('id, organization_id')
+                    .eq('user_id', user.id)
+                    .eq('status', 'active')
+                    .single();
+
+                setHasOrganization(!!data && !error);
+            } catch (err) {
+                setHasOrganization(false);
+            } finally {
+                setLoading(false);
+            }
+        }
+
+        checkOrganization();
+    }, [user]);
+
+    const handleOrganizationCreated = () => {
+        setHasOrganization(true);
+    };
+
+    // Show loading state
+    if (loading) {
+        return (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh' }}>
+                <p>Carregando...</p>
+            </div>
+        );
+    }
 
     const mainNavItems = [
         { label: 'Visão Geral', href: '/dashboard', icon: 'grid' },
@@ -92,11 +140,26 @@ export default function DashboardLayout({
 
                 <div className={styles.sidebarFooter}>
                     <div className={styles.userProfile}>
-                        <div className={styles.avatar}>A</div>
-                        <div className={styles.userInfo}>
-                            <span className={styles.userName}>Admin User</span>
-                            <span className={styles.userEmail}>admin@divine.com</span>
+                        <div className={styles.avatar}>
+                            {user?.user_metadata?.full_name?.[0] || user?.email?.[0]?.toUpperCase() || 'U'}
                         </div>
+                        <div className={styles.userInfo}>
+                            <span className={styles.userName}>
+                                {user?.user_metadata?.full_name || 'Usuário'}
+                            </span>
+                            <span className={styles.userEmail}>{user?.email}</span>
+                        </div>
+                        <button
+                            onClick={() => signOut()}
+                            className={styles.signOutBtn}
+                            title="Sair"
+                        >
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                                <polyline points="16 17 21 12 16 7" />
+                                <line x1="21" y1="12" x2="9" y2="12" />
+                            </svg>
+                        </button>
                     </div>
                 </div>
             </aside>
@@ -126,6 +189,11 @@ export default function DashboardLayout({
                     {children}
                 </div>
             </main>
+
+            {/* Show modal if user doesn't have an organization */}
+            {hasOrganization === false && (
+                <CreateOrganizationModal onSuccess={handleOrganizationCreated} />
+            )}
         </div>
     );
 }
