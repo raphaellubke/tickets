@@ -180,3 +180,62 @@
     color: var(--primary-hover);
 }
 
+@media (max-width: 640px) {
+    .overlay {
+        padding: var(--spacing-sm);
+    }
+
+    .modal {
+        max-width: 100%;
+        border-radius: var(--radius-md);
+    }
+
+    .header {
+        padding: var(--spacing-lg) var(--spacing-md) var(--spacing-md);
+    }
+
+    .logo {
+        width: 56px;
+        height: 56px;
+        font-size: 1.75rem;
+    }
+
+    .title {
+        font-size: 1.5rem;
+    }
+
+    .subtitle {
+        font-size: 0.875rem;
+    }
+
+    .form {
+        padding: 0 var(--spacing-md) var(--spacing-lg);
+    }
+
+    .input {
+        padding: 0.625rem var(--spacing-sm);
+        font-size: 0.9rem;
+    }
+
+    .submitBtn {
+        padding: 0.75rem;
+        font-size: 0.95rem;
+    }
+
+    .footer {
+        padding: var(--spacing-md);
+    }
+}
+
+@media (max-width: 480px) {
+    .overlay {
+        padding: 0;
+        align-items: flex-end;
+    }
+
+    .modal {
+        border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+        max-height: 95vh;
+    }
+}
+

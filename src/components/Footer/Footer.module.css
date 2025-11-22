@@ -146,20 +146,89 @@
 }
 
 @media (max-width: 1024px) {
+    .container {
+        padding: 0 20px;
+    }
+
     .content {
         grid-template-columns: 1fr 1fr;
         gap: var(--spacing-lg);
     }
 }
 
-@media (max-width: 640px) {
+@media (max-width: 768px) {
+    .footer {
+        padding: 24px 0;
+    }
+
+    .container {
+        padding: 0 20px;
+    }
+
     .content {
         grid-template-columns: 1fr;
+        gap: var(--spacing-xl);
+        margin-bottom: var(--spacing-lg);
+    }
+
+    .description {
+        max-width: 100%;
+    }
+
+    .inputGroup {
+        flex-direction: column;
+    }
+
+    .subscribeButton {
+        width: 100%;
+        padding: 0.75rem 1.25rem;
+    }
+}
+
+@media (max-width: 640px) {
+    .footer {
+        padding: 20px 0;
+    }
+
+    .container {
+        padding: 0 16px;
+    }
+
+    .content {
+        gap: var(--spacing-lg);
+        margin-bottom: var(--spacing-md);
+    }
+
+    .logo {
+        font-size: 1.25rem;
+    }
+
+    .logoIcon {
+        font-size: 1.5rem;
+    }
+
+    .sectionTitle {
+        font-size: 1rem;
+        margin-bottom: 12px;
+    }
+
+    .link {
+        font-size: 0.875rem;
+    }
+
+    .newsletterText {
+        font-size: 0.875rem;
     }
 
     .bottom {
         flex-direction: column;
         gap: var(--spacing-md);
         text-align: center;
+        padding-top: var(--spacing-md);
+        font-size: 0.8rem;
+    }
+
+    .socials {
+        gap: var(--spacing-sm);
     }
 }

@@ -291,10 +291,38 @@
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 }
 
+@media (max-width: 1024px) {
+    .pageHeader {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 16px;
+    }
+
+    .statsRow {
+        flex-wrap: wrap;
+        gap: 16px;
+    }
+
+    .statItem {
+        flex: 1 1 calc(50% - 8px);
+        border-right: none;
+        padding-right: 0;
+    }
+}
+
 @media (max-width: 768px) {
+    .container {
+        gap: 24px;
+    }
+
+    .pageTitle {
+        font-size: 20px;
+    }
+
     .filtersBar {
         flex-direction: column;
         align-items: stretch;
+        gap: 12px;
     }
 
     .searchBox {
@@ -303,9 +331,59 @@
 
     .tabs {
         overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
     }
 
     .tableContainer {
         overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .table {
+        min-width: 600px;
+    }
+
+    .statsRow {
+        flex-direction: column;
+        gap: 16px;
+        padding: 16px;
+    }
+
+    .statItem {
+        border-right: none;
+        border-bottom: 1px solid #f3f4f6;
+        padding-bottom: 16px;
+        padding-right: 0;
+    }
+
+    .statItem:last-child {
+        border-bottom: none;
+        padding-bottom: 0;
+    }
+}
+
+@media (max-width: 640px) {
+    .pageTitle {
+        font-size: 18px;
+    }
+
+    .primaryBtn {
+        width: 100%;
+        justify-content: center;
+    }
+
+    .statValue {
+        font-size: 18px;
+    }
+}
+
+@media (max-width: 480px) {
+    .table {
+        font-size: 0.875rem;
+    }
+
+    .actionBtn {
+        width: 28px;
+        height: 28px;
     }
 }

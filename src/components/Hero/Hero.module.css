@@ -1,8 +1,8 @@
 .hero {
     position: relative;
     height: 600px;
-    width: 100%;
-    margin: 0;
+    width: calc(100% - 40px);
+    margin: 0 20px;
     margin-top: 30px;
     padding: 0;
     border-radius: 32px;
@@ -320,19 +320,81 @@
 
 @media (max-width: 640px) {
     .hero {
-        height: 550px;
-        border-radius: 24px;
+        height: 500px;
+        border-radius: 20px;
+        margin: 0 20px;
+        width: calc(100% - 40px);
     }
 
     .content {
-        padding: 0 2rem;
+        padding: 0 1.5rem;
+        gap: 1.5rem;
     }
 
     .title {
-        font-size: 2.5rem;
+        font-size: 2rem;
+        line-height: 1.1;
+    }
+
+    .tag {
+        font-size: 0.75rem;
+        padding: 6px 16px;
+    }
+
+    .details {
+        gap: 1rem;
+    }
+
+    .detailItem {
+        font-size: 1rem;
+        gap: 0.75rem;
+    }
+
+    .icon {
+        font-size: 1.25rem;
+    }
+
+    .ctaButton {
+        padding: 0.875rem 1.5rem;
+        font-size: 0.95rem;
     }
 
     .indicators {
-        bottom: 2rem;
+        bottom: 1.5rem;
+        gap: 0.5rem;
+    }
+
+    .indicator {
+        width: 8px;
+        height: 8px;
+    }
+
+    .activeIndicator {
+        width: 24px;
+    }
+}
+
+@media (max-width: 480px) {
+    .hero {
+        height: 450px;
+        border-radius: 16px;
+    }
+
+    .content {
+        padding: 0 1rem;
+    }
+
+    .title {
+        font-size: 1.75rem;
+    }
+
+    .detailItem {
+        font-size: 0.9rem;
+    }
+
+    .ctaButton {
+        padding: 0.75rem 1.25rem;
+        font-size: 0.875rem;
+        width: 100%;
     }
 }

@@ -319,17 +319,85 @@
     .contentGrid {
         grid-template-columns: 1fr;
     }
+
+    .pageHeader {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 16px;
+    }
+
+    .primaryBtn {
+        width: 100%;
+        justify-content: center;
+    }
 }
 
-@media (max-width: 640px) {
+@media (max-width: 768px) {
+    .container {
+        gap: 24px;
+    }
+
+    .pageTitle {
+        font-size: 20px;
+    }
+
+    .searchBox {
+        width: 100%;
+    }
+
     .memberRow {
         grid-template-columns: 1fr auto;
-        gap: 8px;
+        gap: 12px;
+        padding: 12px 0;
     }
 
     .roleCell,
     .statusCell,
     .activityCell {
         display: none;
+    }
+
+    .memberInfo {
+        gap: 10px;
+    }
+
+    .avatar {
+        width: 32px;
+        height: 32px;
+        font-size: 12px;
+    }
+}
+
+@media (max-width: 640px) {
+    .pageTitle {
+        font-size: 18px;
+    }
+
+    .memberRow {
+        gap: 8px;
+        padding: 10px 0;
+    }
+
+    .name {
+        font-size: 13px;
+    }
+
+    .email {
+        font-size: 11px;
+    }
+
+    .actionBtn {
+        width: 24px;
+        height: 24px;
+    }
+}
+
+@media (max-width: 480px) {
+    .card {
+        padding: 16px;
+    }
+
+    .cardTitle {
+        font-size: 14px;
     }
 }

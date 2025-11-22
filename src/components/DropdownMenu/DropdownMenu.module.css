@@ -75,3 +75,21 @@
     height: 16px;
 }
 
+@media (max-width: 640px) {
+    .menu {
+        min-width: 160px;
+        right: auto;
+        left: 0;
+    }
+
+    .menuItem {
+        padding: 0.625rem 0.875rem;
+        font-size: 0.8rem;
+    }
+
+    .icon {
+        width: 14px;
+        height: 14px;
+    }
+}
+

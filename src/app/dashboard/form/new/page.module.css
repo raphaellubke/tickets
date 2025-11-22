@@ -184,5 +184,48 @@
     .submitBtn {
         width: 100%;
     }
+
+    .section {
+        padding: 1.25rem;
+    }
+}
+
+@media (max-width: 640px) {
+    .container {
+        padding: 1rem 16px;
+    }
+
+    .title {
+        font-size: 1.375rem;
+    }
+
+    .sectionTitle {
+        font-size: 1rem;
+    }
+
+    .input,
+    .select,
+    .textarea {
+        padding: 0.625rem 0.875rem;
+        font-size: 0.875rem;
+    }
+
+    .actions {
+        padding: 1rem;
+    }
+}
+
+@media (max-width: 480px) {
+    .container {
+        padding: 0.875rem 12px;
+    }
+
+    .title {
+        font-size: 1.25rem;
+    }
+
+    .section {
+        padding: 1rem;
+    }
 }
 

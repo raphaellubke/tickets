@@ -320,4 +320,57 @@
     .publishBtn {
         width: 100%;
     }
+
+    .ticketGroupCard {
+        padding: 1rem;
+    }
+
+    .ticketTypeCard {
+        padding: 0.875rem;
+    }
+}
+
+@media (max-width: 640px) {
+    .container {
+        padding: 1.5rem 16px;
+    }
+
+    .title {
+        font-size: 1.375rem;
+    }
+
+    .sectionTitle {
+        font-size: 1.125rem;
+    }
+
+    .input,
+    .textarea,
+    .select {
+        padding: 0.75rem;
+        font-size: 0.9rem;
+    }
+
+    .previewCard {
+        padding: 1rem;
+    }
+
+    .ticketGroupHeader {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.75rem;
+    }
+}
+
+@media (max-width: 480px) {
+    .container {
+        padding: 1rem 12px;
+    }
+
+    .title {
+        font-size: 1.25rem;
+    }
+
+    .section {
+        padding: 1rem;
+    }
 }

@@ -1,8 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/context/AuthContext';
+import { uploadImage, deleteImage } from '@/lib/uploadImage';
 import styles from './page.module.css';
 
 interface Organization {
@@ -19,6 +20,11 @@ export default function OrganizationPage() {
     const [organization, setOrganization] = useState<Organization | null>(null);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
+    const [uploadingLogo, setUploadingLogo] = useState(false);
+    const [logoFile, setLogoFile] = useState<File | null>(null);
+    const [logoPreview, setLogoPreview] = useState<string | null>(null);
+    const [logoError, setLogoError] = useState<string | null>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
     const [formData, setFormData] = useState({
         name: '',
         slug: '',
@@ -40,7 +46,6 @@ export default function OrganizationPage() {
                     .from('organization_members')
                     .select('organization_id')
                     .eq('user_id', user.id)
-                    .eq('status', 'active')
                     .single();
 
                 if (!memberData) {
@@ -67,6 +72,7 @@ export default function OrganizationPage() {
                     phone: orgData.phone || '',
                     website: orgData.website || '',
                 });
+                setLogoPreview(orgData.logo_url || null);
             } catch (error) {
                 console.error('Error fetching organization:', error);
             } finally {
@@ -77,18 +83,110 @@ export default function OrganizationPage() {
         fetchOrganization();
     }, [user]);
 
+    const handleLogoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        setLogoError(null);
+
+        // Validate file type
+        if (!file.type.startsWith('image/')) {
+            setLogoError('Por favor, selecione uma imagem válida (JPG, GIF ou PNG)');
+            return;
+        }
+
+        // Validate file size (1MB max)
+        const maxSizeBytes = 1 * 1024 * 1024;
+        if (file.size > maxSizeBytes) {
+            setLogoError('A imagem deve ter no máximo 1MB');
+            return;
+        }
+
+        setLogoFile(file);
+
+        // Create preview
+        const reader = new FileReader();
+        reader.onloadend = () => {
+            setLogoPreview(reader.result as string);
+        };
+        reader.readAsDataURL(file);
+    };
+
+    const handleLogoRemove = () => {
+        setLogoFile(null);
+        setLogoPreview(null);
+        setLogoError(null);
+        if (fileInputRef.current) {
+            fileInputRef.current.value = '';
+        }
+        // Keep existing logo_url in formData until save
+    };
+
+    const handleLogoChange = () => {
+        fileInputRef.current?.click();
+    };
+
     const handleSave = async () => {
         if (!organization) return;
 
         setSaving(true);
+        setLogoError(null);
+
         try {
+            let finalLogoUrl: string | null = formData.logo_url;
+
+            // Handle logo upload/removal
+            if (logoFile) {
+                // New logo uploaded
+                setUploadingLogo(true);
+                const uploadResult = await uploadImage(logoFile, {
+                    bucket: 'event-images', // Using same bucket, but in 'logos' folder
+                    folder: 'logos',
+                    maxSizeMB: 1
+                });
+
+                if (uploadResult.error) {
+                    setLogoError(uploadResult.error);
+                    setSaving(false);
+                    setUploadingLogo(false);
+                    return;
+                }
+
+                // Delete old logo if exists
+                if (formData.logo_url) {
+                    // Extract path from URL (format: .../public/event-images/logos/filename)
+                    const urlParts = formData.logo_url.split('/logos/');
+                    if (urlParts.length > 1) {
+                        const filename = urlParts[1].split('?')[0]; // Remove query params if any
+                        await deleteImage(`logos/${filename}`, 'event-images');
+                    }
+                }
+
+                finalLogoUrl = uploadResult.url;
+            } else if (!logoPreview && formData.logo_url) {
+                // Logo was removed
+                // Delete old logo from storage
+                if (formData.logo_url) {
+                    // Extract path from URL (format: .../public/event-images/logos/filename)
+                    const urlParts = formData.logo_url.split('/logos/');
+                    if (urlParts.length > 1) {
+                        const filename = urlParts[1].split('?')[0]; // Remove query params if any
+                        await deleteImage(`logos/${filename}`, 'event-images');
+                    }
+                }
+                finalLogoUrl = null;
+            } else if (logoPreview === formData.logo_url) {
+                // Logo unchanged
+                finalLogoUrl = formData.logo_url;
+            }
+
             const { error } = await supabase
                 .from('organizations')
                 .update({
                     name: formData.name,
                     slug: formData.slug,
                     description: formData.description,
-                    logo_url: formData.logo_url,
+                    logo_url: finalLogoUrl,
                     email: formData.email,
                     phone: formData.phone,
                     website: formData.website,
@@ -98,10 +196,17 @@ export default function OrganizationPage() {
 
             if (error) throw error;
 
+            // Update local state
+            setFormData(prev => ({ ...prev, logo_url: finalLogoUrl || '' }));
+            setLogoPreview(finalLogoUrl);
+            setLogoFile(null);
+            setUploadingLogo(false);
+
             alert('Alterações salvas com sucesso!');
         } catch (error: any) {
             console.error('Error saving organization:', error);
             alert('Erro ao salvar: ' + error.message);
+            setUploadingLogo(false);
         } finally {
             setSaving(false);
         }
@@ -159,16 +264,41 @@ export default function OrganizationPage() {
                             <label className={styles.label}>Logo</label>
                             <div className={styles.logoUpload}>
                                 <div className={styles.logoPreview}>
-                                    {formData.logo_url ? (
-                                        <img src={formData.logo_url} alt="Logo" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                    {logoPreview ? (
+                                        <img src={logoPreview} alt="Logo" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '12px' }} />
                                     ) : (
-                                        formData.name[0]?.toUpperCase() || 'D'
+                                        <span>{formData.name[0]?.toUpperCase() || 'D'}</span>
                                     )}
                                 </div>
                                 <div className={styles.uploadActions}>
-                                    <button className={styles.secondaryBtn}>Alterar logo</button>
-                                    <button className={styles.textBtn}>Remover</button>
+                                    <input
+                                        ref={fileInputRef}
+                                        type="file"
+                                        accept="image/jpeg,image/jpg,image/png,image/gif"
+                                        onChange={handleLogoSelect}
+                                        className={styles.fileInput}
+                                        style={{ display: 'none' }}
+                                    />
+                                    <button
+                                        type="button"
+                                        className={styles.secondaryBtn}
+                                        onClick={handleLogoChange}
+                                        disabled={uploadingLogo || saving}
+                                    >
+                                        {uploadingLogo ? 'Enviando...' : 'Alterar logo'}
+                                    </button>
+                                    {(logoPreview || formData.logo_url) && (
+                                        <button
+                                            type="button"
+                                            className={styles.textBtn}
+                                            onClick={handleLogoRemove}
+                                            disabled={uploadingLogo || saving}
+                                        >
+                                            Remover
+                                        </button>
+                                    )}
                                     <p className={styles.uploadHint}>JPG, GIF ou PNG. Max 1MB.</p>
+                                    {logoError && <p className={styles.errorText}>{logoError}</p>}
                                 </div>
                             </div>
                         </div>

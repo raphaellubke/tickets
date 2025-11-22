@@ -273,10 +273,48 @@
     color: var(--primary-color);
 }
 
+@media (max-width: 1024px) {
+    .pageHeader {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 16px;
+    }
+
+    .formsGrid {
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+        gap: 20px;
+    }
+}
+
+@media (max-width: 768px) {
+    .container {
+        gap: 24px;
+    }
+
+    .pageTitle {
+        font-size: 20px;
+    }
+
+    .formsGrid {
+        grid-template-columns: 1fr;
+        gap: 16px;
+    }
+
+    .primaryBtn {
+        width: 100%;
+        justify-content: center;
+    }
+}
+
 @media (max-width: 640px) {
+    .pageTitle {
+        font-size: 18px;
+    }
+
     .statsRow {
         flex-direction: column;
         gap: 16px;
+        padding: 16px;
     }
 
     .statItem {
@@ -289,5 +327,28 @@
     .statItem:last-child {
         border-bottom: none;
         padding-bottom: 0;
+    }
+
+    .statValue {
+        font-size: 18px;
+    }
+
+    .formCard {
+        padding: 16px;
+    }
+
+    .cardStats {
+        flex-direction: column;
+        gap: 12px;
+    }
+}
+
+@media (max-width: 480px) {
+    .formTitle {
+        font-size: 14px;
+    }
+
+    .formMeta {
+        font-size: 11px;
     }
 }

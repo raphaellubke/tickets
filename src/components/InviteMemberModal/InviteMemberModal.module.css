@@ -216,3 +216,62 @@
     cursor: not-allowed;
 }
 
+@media (max-width: 640px) {
+    .overlay {
+        padding: 0;
+        align-items: flex-end;
+    }
+
+    .modal {
+        max-width: 100%;
+        max-height: 95vh;
+        border-radius: 12px 12px 0 0;
+    }
+
+    .header {
+        padding: 1rem;
+    }
+
+    .title {
+        font-size: 1.125rem;
+    }
+
+    .content {
+        padding: 1rem;
+    }
+
+    .input,
+    .select {
+        padding: 0.625rem 0.875rem;
+        font-size: 0.8rem;
+    }
+
+    .linkBox {
+        flex-direction: column;
+    }
+
+    .copyBtn {
+        width: 100%;
+        justify-content: center;
+    }
+
+    .actions {
+        flex-direction: column;
+    }
+
+    .primaryBtn,
+    .secondaryBtn {
+        width: 100%;
+    }
+}
+
+@media (max-width: 480px) {
+    .header {
+        padding: 0.875rem;
+    }
+
+    .content {
+        padding: 0.875rem;
+    }
+}
+
