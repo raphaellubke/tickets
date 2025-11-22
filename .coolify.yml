@@ -1,0 +1,16 @@
+# Coolify Configuration
+# Este arquivo ajuda o Coolify a configurar o projeto corretamente
+
+build:
+  pack: nixpacks
+  command: npm run build
+  install: npm ci --legacy-peer-deps || npm install --legacy-peer-deps
+
+run:
+  command: npm start
+  port: 3000
+
+environment:
+  - NODE_ENV=production
+  - NEXT_TELEMETRY_DISABLED=1
+
