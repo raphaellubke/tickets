@@ -44,8 +44,10 @@ export default function FeaturedEvents() {
         <section className={styles.section}>
             <div className={styles.container}>
                 <div className={styles.header}>
-                    <span className={styles.badge}>✨ Destaques</span>
-                    <h2 className={styles.title}>Eventos Imperdíveis</h2>
+                    <h2 className={styles.title}>Eventos em Destaque</h2>
+                    <Link href="/events" className={styles.viewAll}>
+                        Ver todos →
+                    </Link>
                 </div>
 
                 <div className={styles.grid}>
