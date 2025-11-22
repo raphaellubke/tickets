@@ -1,0 +1,335 @@
+.container {
+    display: flex;
+    flex-direction: column;
+    gap: 32px;
+}
+
+.pageHeader {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+}
+
+.pageTitle {
+    font-size: 24px;
+    font-weight: 700;
+    color: #111827;
+    letter-spacing: -0.02em;
+    margin: 0 0 4px 0;
+}
+
+.pageSubtitle {
+    font-size: 14px;
+    color: #6b7280;
+    margin: 0;
+}
+
+.primaryBtn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    background: #111827;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.primaryBtn:hover {
+    background: #1f2937;
+    transform: translateY(-1px);
+}
+
+.secondaryBtn {
+    width: 100%;
+    padding: 8px 16px;
+    background: white;
+    color: #374151;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.secondaryBtn:hover {
+    background: #f9fafb;
+    border-color: #d1d5db;
+}
+
+/* Content Grid */
+.contentGrid {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: 24px;
+}
+
+.mainColumn,
+.sideColumn {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+}
+
+/* Card Styles */
+.card {
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    padding: 24px;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.cardHeader {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.cardTitle {
+    font-size: 16px;
+    font-weight: 600;
+    color: #111827;
+    margin: 0;
+}
+
+/* Search Box */
+.searchBox {
+    position: relative;
+    width: 240px;
+}
+
+.searchIcon {
+    position: absolute;
+    left: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #9ca3af;
+    pointer-events: none;
+}
+
+.searchInput {
+    width: 100%;
+    padding: 6px 12px 6px 32px;
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    font-size: 13px;
+    outline: none;
+    transition: all 0.2s;
+}
+
+.searchInput:focus {
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+}
+
+/* Members List */
+.membersList {
+    display: flex;
+    flex-direction: column;
+}
+
+.memberRow {
+    display: grid;
+    grid-template-columns: 2fr 1fr 1fr 1fr auto;
+    align-items: center;
+    padding: 16px 0;
+    border-bottom: 1px solid #f3f4f6;
+    gap: 16px;
+}
+
+.memberRow:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+}
+
+.memberInfo {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: #e5e7eb;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    font-weight: 600;
+    color: #4b5563;
+}
+
+.details {
+    display: flex;
+    flex-direction: column;
+}
+
+.name {
+    font-size: 14px;
+    font-weight: 500;
+    color: #111827;
+}
+
+.email {
+    font-size: 12px;
+    color: #6b7280;
+}
+
+.roleBadge {
+    display: inline-block;
+    padding: 2px 8px;
+    background: #f3f4f6;
+    border: 1px solid #e5e7eb;
+    border-radius: 4px;
+    font-size: 12px;
+    color: #374151;
+    font-weight: 500;
+}
+
+.statusCell {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.statusDot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+}
+
+.statusDot.active {
+    background: #10b981;
+}
+
+.statusDot.pending {
+    background: #f59e0b;
+}
+
+.statusText {
+    font-size: 13px;
+    color: #374151;
+}
+
+.activityCell {
+    font-size: 12px;
+    color: #6b7280;
+}
+
+.actionBtn {
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    background: transparent;
+    color: #9ca3af;
+    cursor: pointer;
+    border-radius: 4px;
+}
+
+.actionBtn:hover {
+    background: #f3f4f6;
+    color: #111827;
+}
+
+/* Roles List */
+.rolesList {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.roleItem {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid #f3f4f6;
+}
+
+.roleItem:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+}
+
+.roleHeader {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.roleName {
+    font-size: 13px;
+    font-weight: 600;
+    color: #111827;
+}
+
+.roleCount {
+    font-size: 11px;
+    color: #6b7280;
+    background: #f3f4f6;
+    padding: 1px 6px;
+    border-radius: 10px;
+}
+
+.roleDesc {
+    font-size: 12px;
+    color: #6b7280;
+    margin: 0;
+    line-height: 1.4;
+}
+
+/* Invite Card */
+.inviteCard {
+    background: #eff6ff;
+    border: 1px solid #dbeafe;
+    border-radius: 12px;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.inviteTitle {
+    font-size: 14px;
+    font-weight: 600;
+    color: #1e40af;
+    margin: 0;
+}
+
+.inviteText {
+    font-size: 12px;
+    color: #1e3a8a;
+    margin: 0;
+    line-height: 1.5;
+}
+
+@media (max-width: 1024px) {
+    .contentGrid {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 640px) {
+    .memberRow {
+        grid-template-columns: 1fr auto;
+        gap: 8px;
+    }
+
+    .roleCell,
+    .statusCell,
+    .activityCell {
+        display: none;
+    }
+}

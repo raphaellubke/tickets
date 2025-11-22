@@ -1,0 +1,268 @@
+.layout {
+    display: flex;
+    min-height: 100vh;
+    background-color: #ffffff;
+    color: #111827;
+}
+
+/* Sidebar */
+.sidebar {
+    width: 260px;
+    background-color: #f9fafb;
+    border-right: 1px solid #e5e7eb;
+    display: flex;
+    flex-direction: column;
+    position: fixed;
+    height: 100vh;
+    left: 0;
+    top: 0;
+    z-index: 50;
+}
+
+.sidebarHeader {
+    padding: 16px;
+    height: 64px;
+    display: flex;
+    align-items: center;
+    border-bottom: 1px solid transparent;
+    /* Placeholder for potential border */
+}
+
+.orgSwitcher {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+    width: 100%;
+}
+
+.orgSwitcher:hover {
+    background-color: #f3f4f6;
+}
+
+.orgIcon {
+    width: 32px;
+    height: 32px;
+    background: linear-gradient(135deg, #111827 0%, #374151 100%);
+    color: white;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 14px;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.orgInfo {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+}
+
+.orgName {
+    font-size: 14px;
+    font-weight: 600;
+    color: #111827;
+    line-height: 1.2;
+}
+
+.orgRole {
+    font-size: 12px;
+    color: #6b7280;
+}
+
+.chevron {
+    color: #9ca3af;
+}
+
+/* Navigation */
+.nav {
+    flex: 1;
+    padding: 24px 12px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+}
+
+.navSection {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.navSpacer {
+    flex: 1;
+    min-height: 20px;
+}
+
+.navTitle {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    color: #9ca3af;
+    padding: 0 12px;
+    margin-bottom: 8px;
+    letter-spacing: 0.05em;
+}
+
+.navItem {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 500;
+    color: #4b5563;
+    text-decoration: none;
+    transition: all 0.2s;
+}
+
+.navItem:hover {
+    background-color: #f3f4f6;
+    color: #111827;
+}
+
+.active {
+    background-color: #ffffff;
+    color: #111827;
+    font-weight: 600;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+    border: 1px solid #e5e7eb;
+}
+
+.active svg {
+    color: #111827;
+}
+
+/* Sidebar Footer */
+.sidebarFooter {
+    padding: 16px;
+    border-top: 1px solid #e5e7eb;
+}
+
+.userProfile {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background-color: #e5e7eb;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 600;
+    color: #4b5563;
+}
+
+.userInfo {
+    display: flex;
+    flex-direction: column;
+}
+
+.userName {
+    font-size: 13px;
+    font-weight: 500;
+    color: #111827;
+}
+
+.userEmail {
+    font-size: 12px;
+    color: #6b7280;
+}
+
+/* Main Content */
+.main {
+    flex: 1;
+    margin-left: 260px;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    /* Prevent overflow */
+}
+
+.header {
+    height: 64px;
+    border-bottom: 1px solid #e5e7eb;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 32px;
+    background-color: rgba(255, 255, 255, 0.8);
+    backdrop-filter: blur(8px);
+    position: sticky;
+    top: 0;
+    z-index: 40;
+}
+
+.breadcrumbs {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+}
+
+.breadcrumbItem {
+    color: #6b7280;
+}
+
+.separator {
+    color: #d1d5db;
+}
+
+.breadcrumbItemActive {
+    color: #111827;
+    font-weight: 500;
+}
+
+.siteLink {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    font-weight: 500;
+    color: #4b5563;
+    text-decoration: none;
+    padding: 6px 12px;
+    border-radius: 6px;
+    border: 1px solid #e5e7eb;
+    transition: all 0.2s;
+}
+
+.siteLink:hover {
+    background-color: #f9fafb;
+    border-color: #d1d5db;
+    color: #111827;
+}
+
+.content {
+    padding: 32px;
+    flex: 1;
+    max-width: 1200px;
+    width: 100%;
+    margin: 0 auto;
+}
+
+@media (max-width: 768px) {
+    .sidebar {
+        display: none;
+        /* For now, hide on mobile or implement drawer */
+    }
+
+    .main {
+        margin-left: 0;
+    }
+
+    .content {
+        padding: 16px;
+    }
+}
