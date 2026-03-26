@@ -48,3 +48,4 @@ O projeto inclui os seguintes arquivos de configuração:
 - O servidor inicia na porta 3000 (ou na porta definida pela variável PORT)
 - Certifique-se de que as variáveis do Supabase estão configuradas corretamente
 
+
