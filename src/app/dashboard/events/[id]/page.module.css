@@ -1,0 +1,393 @@
+.container {
+    display: flex;
+    flex-direction: column;
+    gap: 28px;
+}
+
+.backBtn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    color: #6b7280;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+    text-decoration: none;
+    transition: color 0.15s;
+}
+
+.backBtn:hover {
+    color: #111827;
+}
+
+/* Event Header Card */
+.eventCard {
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    padding: 24px;
+}
+
+.eventHeader {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 16px;
+}
+
+.eventImage {
+    width: 80px;
+    height: 80px;
+    border-radius: 10px;
+    background-size: cover;
+    background-position: center;
+    flex-shrink: 0;
+}
+
+.eventInfo {
+    flex: 1;
+}
+
+.eventName {
+    font-size: 20px;
+    font-weight: 700;
+    color: #111827;
+    margin: 0 0 8px 0;
+}
+
+.eventMeta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    font-size: 13px;
+    color: #6b7280;
+}
+
+.metaItem {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.statusBadge {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.statusPublished { background: #dcfce7; color: #166534; }
+.statusDraft { background: #fef9c3; color: #854d0e; }
+.statusEnded { background: #f3f4f6; color: #6b7280; }
+.statusCancelled { background: #fee2e2; color: #991b1b; }
+
+.headerActions {
+    display: flex;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+.editBtn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    background: #111827;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    text-decoration: none;
+    transition: background 0.2s;
+}
+
+.editBtn:hover {
+    background: #1f2937;
+}
+
+/* Stats Row */
+.statsRow {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+}
+
+.statCard {
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    padding: 20px 24px;
+}
+
+.statLabel {
+    font-size: 13px;
+    color: #6b7280;
+    margin: 0 0 6px 0;
+}
+
+.statValue {
+    font-size: 26px;
+    font-weight: 700;
+    color: #111827;
+    margin: 0;
+    letter-spacing: -0.02em;
+}
+
+.statSub {
+    font-size: 12px;
+    color: #9ca3af;
+    margin: 2px 0 0 0;
+}
+
+/* Waitlist Section */
+.sectionCard {
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+.sectionHeader {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px 24px;
+    border-bottom: 1px solid #f3f4f6;
+}
+
+.sectionTitle {
+    font-size: 15px;
+    font-weight: 600;
+    color: #111827;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.sectionBadge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 22px;
+    height: 22px;
+    padding: 0 6px;
+    background: #f3f4f6;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 700;
+    color: #374151;
+}
+
+.filterRow {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+
+.select {
+    padding: 6px 10px;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    font-size: 13px;
+    color: #374151;
+    background: #fff;
+    cursor: pointer;
+}
+
+.table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.table th {
+    padding: 10px 24px;
+    text-align: left;
+    font-size: 12px;
+    font-weight: 600;
+    color: #6b7280;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    background: #f9fafb;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.table td {
+    padding: 14px 24px;
+    font-size: 13px;
+    color: #374151;
+    border-bottom: 1px solid #f3f4f6;
+    vertical-align: middle;
+}
+
+.table tr:last-child td {
+    border-bottom: none;
+}
+
+.table tr:hover td {
+    background: #fafafa;
+}
+
+.nameBold {
+    font-weight: 500;
+    color: #111827;
+}
+
+.emailText {
+    color: #6b7280;
+    font-size: 12px;
+    margin-top: 2px;
+}
+
+.positionBadge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    background: #f3f4f6;
+    border-radius: 50%;
+    font-size: 12px;
+    font-weight: 700;
+    color: #374151;
+}
+
+.statusBadgeSm {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 500;
+}
+
+.statusWaiting   { background: #fef9c3; color: #854d0e; }
+.statusNotified  { background: #dbeafe; color: #1e40af; }
+.statusConverted { background: #dcfce7; color: #166534; }
+.statusExpired   { background: #f3f4f6; color: #6b7280; }
+
+.actionBtn {
+    padding: 4px 10px;
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    font-size: 12px;
+    background: #fff;
+    color: #374151;
+    cursor: pointer;
+    transition: all 0.15s;
+    margin-right: 4px;
+}
+
+.actionBtn:hover {
+    background: #f3f4f6;
+}
+
+.deleteBtn {
+    padding: 4px 10px;
+    border: 1px solid #fecaca;
+    border-radius: 6px;
+    font-size: 12px;
+    background: #fff;
+    color: #dc2626;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.deleteBtn:hover {
+    background: #fef2f2;
+}
+
+.emptyState {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 3rem 2rem;
+    color: #9ca3af;
+    text-align: center;
+    gap: 0.5rem;
+}
+
+.emptyState p {
+    margin: 0;
+    font-size: 13px;
+}
+
+.allowWaitlistHint {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 12px 16px;
+    background: #fffbeb;
+    border: 1px solid #fde68a;
+    border-radius: 8px;
+    font-size: 13px;
+    color: #92400e;
+    margin: 16px 24px;
+}
+
+.noWaitlistPanel {
+    padding: 3rem 2rem;
+    text-align: center;
+    color: #9ca3af;
+}
+
+.noWaitlistPanel p {
+    font-size: 13px;
+    margin: 8px 0 0 0;
+}
+
+/* Participants table additions */
+.bulkPdfBtn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
+    background: #111827;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.bulkPdfBtn:hover {
+    background: #1f2937;
+}
+
+.searchBox {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.searchIcon {
+    position: absolute;
+    left: 10px;
+    color: #9ca3af;
+    pointer-events: none;
+}
+
+.searchInput {
+    padding: 6px 10px 6px 30px;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    font-size: 13px;
+    color: #374151;
+    background: #fff;
+    width: 200px;
+    transition: border-color 0.15s;
+}
+
+.searchInput:focus {
+    outline: none;
+    border-color: #4A90E2;
+}

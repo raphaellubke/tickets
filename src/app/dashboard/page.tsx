@@ -6,14 +6,23 @@ import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/context/AuthContext';
 import styles from './page.module.css';
 
+const DATE_RANGE_OPTIONS = [
+    { label: 'Últimos 7 dias', value: '7d', days: 7 },
+    { label: 'Últimos 30 dias', value: '30d', days: 30 },
+    { label: 'Últimos 90 dias', value: '90d', days: 90 },
+    { label: 'Todo o período', value: 'all', days: null },
+];
+
 export default function DashboardPage() {
     const { user } = useAuth();
     const [loading, setLoading] = useState(true);
+    const [dateRange, setDateRange] = useState('30d');
+    const [showDateMenu, setShowDateMenu] = useState(false);
     const [stats, setStats] = useState({
         totalRevenue: 0,
         ticketsSold: 0,
         conversionRate: 0,
-        views: 0,
+        totalOrders: 0,
     });
     const [featuredEvents, setFeaturedEvents] = useState<any[]>([]);
     const [upcomingEvents, setUpcomingEvents] = useState<any[]>([]);
@@ -21,61 +30,70 @@ export default function DashboardPage() {
     const [revenueChartData, setRevenueChartData] = useState<number[]>([]);
     const supabase = createClient();
 
+    const selectedRange = DATE_RANGE_OPTIONS.find(o => o.value === dateRange)!;
+
     useEffect(() => {
         async function fetchDashboardData() {
             if (!user) return;
 
+            setLoading(true);
             try {
                 // Get user's organization
-                const { data: memberData } = await supabase
+                const { data: members } = await supabase
                     .from('organization_members')
                     .select('organization_id')
                     .eq('user_id', user.id)
-                    .single();
+                    .limit(1);
+                const memberData = members?.[0];
 
                 if (!memberData) {
                     setLoading(false);
                     return;
                 }
 
-                // Fetch orders for revenue calculation
-                const { data: ordersData } = await supabase
+                // Calculate cutoff date based on selected range
+                const rangeDays = selectedRange.days;
+                const cutoffDate = rangeDays
+                    ? new Date(Date.now() - rangeDays * 24 * 60 * 60 * 1000).toISOString()
+                    : null;
+
+                // Fetch ALL orders (paid + pending) for conversion rate
+                let allOrdersQuery = supabase
                     .from('orders')
                     .select('total_amount, payment_status, created_at, paid_at')
-                    .eq('organization_id', memberData.organization_id)
-                    .eq('payment_status', 'paid');
+                    .eq('organization_id', memberData.organization_id);
+                if (cutoffDate) allOrdersQuery = allOrdersQuery.gte('created_at', cutoffDate);
+                const { data: allOrdersData } = await allOrdersQuery;
+
+                const paidOrders = (allOrdersData || []).filter(o => o.payment_status === 'paid');
+                const totalOrders = (allOrdersData || []).length;
 
                 // Calculate total revenue from paid orders
-                const totalRevenue = ordersData?.reduce((sum, order) => {
+                const totalRevenue = paidOrders.reduce((sum, order) => {
                     return sum + (parseFloat(order.total_amount?.toString() || '0') || 0);
-                }, 0) || 0;
+                }, 0);
+
+                // Conversion rate = paid / total orders
+                const conversionRate = totalOrders > 0
+                    ? Math.round((paidOrders.length / totalOrders) * 100)
+                    : 0;
 
                 // Fetch tickets sold
-                const { data: ticketsData } = await supabase
+                let ticketsQuery = supabase
                     .from('tickets')
                     .select('id, status, created_at')
                     .eq('organization_id', memberData.organization_id)
                     .in('status', ['active', 'used']);
+                if (cutoffDate) ticketsQuery = ticketsQuery.gte('created_at', cutoffDate);
+                const { data: ticketsData } = await ticketsQuery;
 
                 const ticketsSold = ticketsData?.length || 0;
-
-                // Calculate conversion rate (simplified: tickets sold / total views estimate)
-                // For now, using a basic calculation
-                const conversionRate = ticketsSold > 0 ? ((ticketsSold / (ticketsSold * 30)) * 100).toFixed(1) : '0.0';
-
-                // Calculate total views from events
-                const { data: eventsViews } = await supabase
-                    .from('events')
-                    .select('views')
-                    .eq('organization_id', memberData.organization_id);
-
-                const views = eventsViews?.reduce((sum, event) => sum + (event.views || 0), 0) || 0;
 
                 setStats({
                     totalRevenue,
                     ticketsSold,
-                    conversionRate: parseFloat(conversionRate),
-                    views: Math.round(views),
+                    conversionRate,
+                    totalOrders,
                 });
 
                 // Fetch featured events (top selling - events with most tickets sold)
@@ -83,27 +101,23 @@ export default function DashboardPage() {
                     .from('events')
                     .select('*')
                     .eq('organization_id', memberData.organization_id)
-                    .in('status', ['publicado', 'ativo'])
+                    .in('status', ['published', 'draft'])
                     .order('created_at', { ascending: false })
                     .limit(3);
 
-                // Get ticket counts for each event
-                const processedEvents = await Promise.all((eventsData || []).map(async (event) => {
-                    const { count, error } = await supabase
-                        .from('tickets')
-                        .select('*', { count: 'exact', head: true })
-                        .eq('event_id', event.id)
-                        .in('status', ['active', 'used']);
+                // Get ticket counts for each event via event_ticket_types (avoids RLS on tickets table)
+                const eventIds = (eventsData || []).map(e => e.id);
+                const { data: typesData } = await supabase
+                    .from('event_ticket_types')
+                    .select('event_id, quantity_sold')
+                    .in('event_id', eventIds);
 
-                    if (error) {
-                        console.error('Error counting tickets:', error);
-                    }
-
-                    return {
-                        ...event,
-                        ticketsSold: count ?? 0,
-                    };
-                }));
+                const processedEvents = (eventsData || []).map((event) => {
+                    const sold = (typesData || [])
+                        .filter(t => t.event_id === event.id)
+                        .reduce((sum, t) => sum + (t.quantity_sold || 0), 0);
+                    return { ...event, ticketsSold: sold };
+                });
 
                 setFeaturedEvents(processedEvents);
 
@@ -123,20 +137,19 @@ export default function DashboardPage() {
                 setUpcomingEvents(upcomingData || []);
 
                 // Fetch recent sales from orders
-                const { data: recentSalesData } = await supabase
+                let recentSalesQuery = supabase
                     .from('orders')
-                    .select(`
-                        *,
-                        events!inner(name, organization_id)
-                    `)
-                    .eq('events.organization_id', memberData.organization_id)
+                    .select('*, events(name)')
+                    .eq('organization_id', memberData.organization_id)
                     .eq('payment_status', 'paid')
                     .order('paid_at', { ascending: false, nullsFirst: false })
                     .limit(5);
+                if (cutoffDate) recentSalesQuery = recentSalesQuery.gte('created_at', cutoffDate);
+                const { data: recentSalesData } = await recentSalesQuery;
 
                 setRecentSales(recentSalesData || []);
 
-                // Calculate revenue for last 7 days
+                // Calculate revenue per day for chart (last 7 days always)
                 const last7Days = [];
                 const todayForChart = new Date();
                 for (let i = 6; i >= 0; i--) {
@@ -146,12 +159,12 @@ export default function DashboardPage() {
                     const nextDay = new Date(date);
                     nextDay.setDate(nextDay.getDate() + 1);
 
-                    const dayRevenue = ordersData?.filter(order => {
+                    const dayRevenue = paidOrders.filter(order => {
                         const orderDate = new Date(order.paid_at || order.created_at);
                         return orderDate >= date && orderDate < nextDay;
                     }).reduce((sum, order) => {
                         return sum + (parseFloat(order.total_amount?.toString() || '0') || 0);
-                    }, 0) || 0;
+                    }, 0);
 
                     last7Days.push(dayRevenue);
                 }
@@ -168,7 +181,7 @@ export default function DashboardPage() {
         }
 
         fetchDashboardData();
-    }, [user]);
+    }, [user, dateRange]);
 
     const formatPrice = (price: number) => {
         return new Intl.NumberFormat('pt-BR', {
@@ -216,9 +229,33 @@ export default function DashboardPage() {
                     <p className={styles.pageSubtitle}>Acompanhe o desempenho dos seus eventos</p>
                 </div>
                 <div className={styles.headerActions}>
-                    <div className={styles.dateRange}>
-                        <span className={styles.dateText}>Últimos 30 dias</span>
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M6 9l6 6 6-6" /></svg>
+                    <div style={{ position: 'relative' }}>
+                        <div className={styles.dateRange} onClick={() => setShowDateMenu(v => !v)}>
+                            <span>{selectedRange.label}</span>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M6 9l6 6 6-6" /></svg>
+                        </div>
+                        {showDateMenu && (
+                            <div style={{
+                                position: 'absolute', top: 'calc(100% + 4px)', right: 0, zIndex: 100,
+                                background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8,
+                                boxShadow: '0 4px 12px rgba(0,0,0,0.1)', minWidth: 180, overflow: 'hidden'
+                            }}>
+                                {DATE_RANGE_OPTIONS.map(opt => (
+                                    <div
+                                        key={opt.value}
+                                        onClick={() => { setDateRange(opt.value); setShowDateMenu(false); }}
+                                        style={{
+                                            padding: '10px 16px', fontSize: 13, cursor: 'pointer',
+                                            fontWeight: opt.value === dateRange ? 600 : 400,
+                                            background: opt.value === dateRange ? '#f3f4f6' : 'transparent',
+                                            color: opt.value === dateRange ? '#111827' : '#6b7280',
+                                        }}
+                                    >
+                                        {opt.label}
+                                    </div>
+                                ))}
+                            </div>
+                        )}
                     </div>
                     <Link href="/dashboard/events/new" className={styles.primaryBtn}>
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
@@ -258,19 +295,19 @@ export default function DashboardPage() {
                     </div>
                     <div className={styles.statValue}>{stats.conversionRate}%</div>
                     <div className={styles.statTrend}>
-                        <span className={styles.trendUp}>Estimado</span>
-                        <span className={styles.trendContext}>vs. mês anterior</span>
+                        <span className={styles.trendUp}>{stats.totalOrders} pedidos</span>
+                        <span className={styles.trendContext}>no período</span>
                     </div>
                 </div>
                 <div className={styles.statCard}>
                     <div className={styles.statHeader}>
-                        <span className={styles.statLabel}>Visualizações</span>
-                        <span className={styles.statIcon}>👀</span>
+                        <span className={styles.statLabel}>Pedidos Totais</span>
+                        <span className={styles.statIcon}>🛒</span>
                     </div>
-                    <div className={styles.statValue}>{formatCompactNumber(stats.views)}</div>
+                    <div className={styles.statValue}>{formatCompactNumber(stats.totalOrders)}</div>
                     <div className={styles.statTrend}>
-                        <span className={styles.trendDown}>Estimado</span>
-                        <span className={styles.trendContext}>vs. mês anterior</span>
+                        <span className={styles.trendUp}>{stats.totalOrders > 0 ? Math.round((stats.ticketsSold / stats.totalOrders) * 10) / 10 : 0} tickets/pedido</span>
+                        <span className={styles.trendContext}>média</span>
                     </div>
                 </div>
             </div>

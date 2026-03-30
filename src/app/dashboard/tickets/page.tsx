@@ -13,7 +13,6 @@ interface Ticket {
     event_id: string;
     ticket_type_id?: string;
     status: string;
-    price: number;
     created_at: string;
     // Legacy fields
     customer_name?: string;
@@ -54,12 +53,12 @@ export default function TicketsPage() {
 
             try {
                 // Get user's organization
-                const { data: memberData } = await supabase
+                const { data: members } = await supabase
                     .from('organization_members')
                     .select('organization_id')
                     .eq('user_id', user.id)
-                    .eq('status', 'active')
-                    .single();
+                    .limit(1);
+                const memberData = members?.[0];
 
                 if (!memberData) {
                     setLoading(false);
@@ -69,14 +68,10 @@ export default function TicketsPage() {
                 // Fetch events for filter
                 const { data: eventsData } = await supabase
                     .from('events')
-                    .select('id, name, title')
+                    .select('id, name')
                     .eq('organization_id', memberData.organization_id);
 
-                setEvents((eventsData || []).map(e => ({
-                    ...e,
-                    name: e.name || e.title,
-                    title: e.title || e.name
-                })));
+                setEvents(eventsData || []);
 
                 // Fetch tickets with event, ticket type, and order info
                 // Only tickets from events of the user's organization
@@ -108,7 +103,7 @@ export default function TicketsPage() {
                         .from('tickets')
                         .select(`
                             *,
-                            events:event_id(name, title),
+                            events:event_id(name),
                             event_ticket_types:ticket_type_id(name),
                             orders:order_id(participant_name, participant_email, order_number, event_id, user_id)
                         `)
@@ -173,7 +168,7 @@ export default function TicketsPage() {
                             try {
                                 const { data: eventData } = await supabase
                                     .from('events')
-                                    .select('name, title')
+                                    .select('name')
                                     .eq('id', ticket.event_id)
                                     .single();
                                 event = eventData;
@@ -227,7 +222,7 @@ export default function TicketsPage() {
 
                         return {
                             ...ticket,
-                            events: event ? { name: event.name || event.title } : null,
+                            events: event ? { name: event.name } : null,
                             event_ticket_types: ticketType || null,
                             orders: order
                         };
@@ -302,9 +297,9 @@ export default function TicketsPage() {
         return today === ticketDate && (t.status === 'active' || t.status === 'used' || t.status === 'paid');
     });
 
-    const todayRevenue = todayTickets.reduce((sum, t) => sum + (parseFloat(t.price?.toString() || '0') || 0), 0);
+    const todayRevenue = 0; // price not stored on ticket; use reports for revenue
     const totalSold = tickets.filter(t => t.status === 'active' || t.status === 'used' || t.status === 'paid').length;
-    const avgTicket = totalSold > 0 ? tickets.reduce((sum, t) => sum + (parseFloat(t.price?.toString() || '0') || 0), 0) / totalSold : 0;
+    const avgTicket = 0; // price not stored on ticket; use reports for revenue
 
     if (loading) {
         return (
@@ -443,7 +438,7 @@ export default function TicketsPage() {
                                         </span>
                                     </td>
                                     <td className={styles.priceCell}>
-                                        {formatPrice(parseFloat(ticket.price?.toString() || '0'))}
+                                        —
                                     </td>
                                     <td>
                                         <span className={`${styles.badge} ${

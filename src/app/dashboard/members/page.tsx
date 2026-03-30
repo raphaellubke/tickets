@@ -30,24 +30,21 @@ export default function MembersPage() {
 
             try {
                 // First, get the user's organization
-                const { data: memberData } = await supabase
+                const { data: members } = await supabase
                     .from('organization_members')
                     .select('organization_id')
                     .eq('user_id', user.id)
-                    .eq('status', 'active')
-                    .single();
+                    .limit(1);
+                const memberData = members?.[0];
 
                 if (!memberData) {
                     setLoading(false);
                     return;
                 }
 
-                // Then fetch all members of that organization
+                // Then fetch all members via RPC (bypasses RLS recursion)
                 const { data: allMembers, error } = await supabase
-                    .from('organization_members')
-                    .select('*')
-                    .eq('organization_id', memberData.organization_id)
-                    .order('created_at', { ascending: true });
+                    .rpc('get_org_members', { p_org_id: memberData.organization_id });
 
                 if (error) throw error;
 
@@ -98,8 +95,8 @@ export default function MembersPage() {
     };
 
     const filteredMembers = members.filter(member =>
-        member.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        member.email.toLowerCase().includes(searchTerm.toLowerCase())
+        (member.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (member.email || '').toLowerCase().includes(searchTerm.toLowerCase())
     );
 
     const roleCounts = members.reduce((acc, member) => {
@@ -154,7 +151,7 @@ export default function MembersPage() {
                                 <div key={member.id} className={styles.memberRow}>
                                     <div className={styles.memberInfo}>
                                         <div className={styles.avatar}>
-                                            {member.name[0]?.toUpperCase() || 'U'}
+                                            {member.name?.[0]?.toUpperCase() || 'U'}
                                         </div>
                                         <div className={styles.details}>
                                             <span className={styles.name}>{member.name}</span>

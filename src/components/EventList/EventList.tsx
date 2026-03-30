@@ -41,7 +41,7 @@ export default function EventList() {
                         event_time,
                         status
                     `)
-                    .in('status', ['publicado', 'ativo'])
+                    .in('status', ['published'])
                     .gte('event_date', today.toISOString().split('T')[0])
                     .order('event_date', { ascending: true })
                     .order('event_time', { ascending: true })

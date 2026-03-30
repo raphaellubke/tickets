@@ -290,10 +290,44 @@
     margin: 0 auto;
 }
 
+.hamburger {
+    display: none;
+    padding: 6px;
+    background: transparent;
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    cursor: pointer;
+    color: #4b5563;
+    align-items: center;
+    justify-content: center;
+}
+
+.hamburger:hover {
+    background: #f9fafb;
+    color: #111827;
+}
+
+.backdrop {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.3);
+    z-index: 49;
+}
+
 @media (max-width: 768px) {
     .sidebar {
-        display: none;
-        /* For now, hide on mobile or implement drawer */
+        transform: translateX(-100%);
+        transition: transform 0.25s ease;
+        z-index: 50;
+    }
+
+    .sidebarOpen {
+        transform: translateX(0);
+    }
+
+    .backdrop {
+        display: block;
     }
 
     .main {
@@ -302,5 +336,13 @@
 
     .content {
         padding: 16px;
+    }
+
+    .header {
+        padding: 0 16px;
+    }
+
+    .hamburger {
+        display: flex;
     }
 }

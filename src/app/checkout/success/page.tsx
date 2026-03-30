@@ -3,6 +3,7 @@
 import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
+import { useAuth } from '@/context/AuthContext';
 import Header from '@/components/Header/Header';
 import Footer from '@/components/Footer/Footer';
 import Link from 'next/link';
@@ -12,14 +13,16 @@ function CheckoutSuccessPageContent() {
     const searchParams = useSearchParams();
     const router = useRouter();
     const supabase = createClient();
-    
+    const { user } = useAuth();
+
     const orderId = searchParams.get('order_id');
-    
+
     const [order, setOrder] = useState<any>(null);
     const [tickets, setTickets] = useState<any[]>([]);
     const [pendingForms, setPendingForms] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [magicLinkSent, setMagicLinkSent] = useState(false);
 
     useEffect(() => {
         async function loadOrderData() {
@@ -35,7 +38,7 @@ function CheckoutSuccessPageContent() {
                     .from('orders')
                     .select(`
                         *,
-                        events(name, event_date, location)
+                        events(name, title, event_date, location)
                     `)
                     .eq('id', orderId)
                     .single();
@@ -47,6 +50,18 @@ function CheckoutSuccessPageContent() {
                 }
 
                 setOrder(orderData);
+
+                // Se comprador não tem conta, envia magic link automaticamente
+                if (!user && orderData.participant_email) {
+                    const redirectTo = `${window.location.origin}/auth/callback?next=/dashboard/tickets`;
+                    const { error: otpError } = await supabase.auth.signInWithOtp({
+                        email: orderData.participant_email,
+                        options: { emailRedirectTo: redirectTo },
+                    });
+                    if (!otpError) {
+                        setMagicLinkSent(true);
+                    }
+                }
 
                 // Load tickets
                 const { data: ticketsData } = await supabase
@@ -151,7 +166,7 @@ function CheckoutSuccessPageContent() {
                         {order.events && (
                             <div className={styles.infoRow}>
                                 <span className={styles.infoLabel}>Evento:</span>
-                                <span className={styles.infoValue}>{order.events.name}</span>
+                                <span className={styles.infoValue}>{order.events.name || order.events.title}</span>
                             </div>
                         )}
                     </div>
@@ -170,9 +185,6 @@ function CheckoutSuccessPageContent() {
                                                     <div className={styles.ticketType}>
                                                         {ticket.event_ticket_types?.name || 'Ingresso'}
                                                     </div>
-                                                </div>
-                                                <div className={styles.ticketPrice}>
-                                                    {formatPrice(parseFloat(ticket.price?.toString() || '0'))}
                                                 </div>
                                             </div>
                                             <div className={styles.ticketStatus}>
@@ -204,6 +216,25 @@ function CheckoutSuccessPageContent() {
                                 <strong>Formulários Pendentes</strong>
                                 <p>Você tem {pendingForms.length} formulário{pendingForms.length > 1 ? 's' : ''} para preencher. Clique nos links acima para preencher.</p>
                             </div>
+                        </div>
+                    )}
+
+                    {magicLinkSent && (
+                        <div style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 10,
+                            background: '#f0f9ff',
+                            border: '1px solid #bae6fd',
+                            borderRadius: 10,
+                            padding: '1rem 1.25rem',
+                            margin: '1.5rem 0',
+                            textAlign: 'left'
+                        }}>
+                            <span style={{ fontSize: 20, flexShrink: 0 }}>✉️</span>
+                            <p style={{ margin: 0, fontSize: 13, color: '#0369a1', lineHeight: 1.5 }}>
+                                Enviamos um link para <strong>{order.participant_email}</strong> — clique nele para acessar seus ingressos a qualquer hora, sem precisar de senha.
+                            </p>
                         </div>
                     )}
 

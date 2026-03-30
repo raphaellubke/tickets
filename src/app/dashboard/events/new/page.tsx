@@ -68,7 +68,7 @@ export default function NewEventPage() {
         addressNotes: '',
         category: '',
         tags: '',
-        status: 'rascunho',
+        status: 'draft',
         formId: '',
         requireForm: false,
         allowWaitlist: false,
@@ -110,11 +110,12 @@ export default function NewEventPage() {
 
         try {
             // Get user's organization
-            const { data: memberData } = await supabase
+            const { data: members0 } = await supabase
                 .from('organization_members')
                 .select('organization_id')
                 .eq('user_id', user.id)
-                .single();
+                .limit(1);
+            const memberData = members0?.[0];
 
             if (!memberData) return;
 
@@ -123,7 +124,7 @@ export default function NewEventPage() {
                 .from('forms')
                 .select('id, name')
                 .eq('organization_id', memberData.organization_id)
-                .eq('is_active', true)
+                .eq('status', 'active')
                 .order('created_at', { ascending: false });
 
             if (!formsError && formsData) {
@@ -192,11 +193,12 @@ export default function NewEventPage() {
         setLoadingData(true);
         try {
             // Get user's organization
-            const { data: memberData } = await supabase
+            const { data: members1 } = await supabase
                 .from('organization_members')
                 .select('organization_id')
                 .eq('user_id', user.id)
-                .single();
+                .limit(1);
+            const memberData = members1?.[0];
 
             if (!memberData) {
                 setError('Organização não encontrada');
@@ -218,19 +220,8 @@ export default function NewEventPage() {
                 return;
             }
 
-            // Load associated form
-            let associatedFormId = event.form_id || '';
-            if (!associatedFormId) {
-                const { data: eventForm } = await supabase
-                    .from('event_forms')
-                    .select('form_id')
-                    .eq('event_id', eventId)
-                    .single();
-                
-                if (eventForm) {
-                    associatedFormId = eventForm.form_id;
-                }
-            }
+            // Load associated form (stored directly on the event row)
+            const associatedFormId = event.form_id || '';
 
             // Populate form data
             setFormData({
@@ -245,7 +236,7 @@ export default function NewEventPage() {
                 addressNotes: event.address_notes || '',
                 category: event.category || '',
                 tags: event.tags?.join(', ') || '',
-                status: event.status || 'rascunho',
+                status: event.status || 'draft',
                 formId: associatedFormId,
                 requireForm: event.require_form || false,
                 allowWaitlist: event.allow_waitlist || false,
@@ -402,13 +393,14 @@ export default function NewEventPage() {
 
         try {
             // Get user's organization
-            const { data: memberData, error: memberError } = await supabase
+            const { data: members2 } = await supabase
                 .from('organization_members')
                 .select('organization_id')
                 .eq('user_id', user.id)
-                .single();
+                .limit(1);
+            const memberData = members2?.[0];
 
-            if (memberError || !memberData) {
+            if (!memberData) {
                 throw new Error('Organização não encontrada');
             }
 
@@ -432,7 +424,7 @@ export default function NewEventPage() {
                 name: formData.title,
                 description: formData.description || null,
                 category: formData.category || null,
-                status: formData.status || 'rascunho',
+                status: formData.status || 'draft',
                 event_date: formData.date,
                 event_time: formData.time,
                 end_date: formData.endDate || null,
@@ -587,8 +579,8 @@ export default function NewEventPage() {
                             .from('event_ticket_types')
                             .insert([{
                                 event_id: currentEventId,
-                                organization_id: memberData.organization_id,
                                 group_id: groupId,
+                                organization_id: memberData.organization_id,
                                 name: type.name,
                                 description: type.description || null,
                                 price: parseFloat(type.price) || 0,
@@ -620,50 +612,6 @@ export default function NewEventPage() {
                             console.error('Error updating ticket type:', updateError);
                         }
                     }
-                }
-            }
-
-            // Handle form association
-            if (formData.formId) {
-                if (isEditMode && eventId) {
-                    // Check if relation already exists
-                    const { data: existingRelation } = await supabase
-                        .from('event_forms')
-                        .select('id')
-                        .eq('event_id', currentEventId)
-                        .single();
-
-                    if (existingRelation) {
-                        // Update existing relation
-                        await supabase
-                            .from('event_forms')
-                            .update({ form_id: formData.formId })
-                            .eq('event_id', currentEventId);
-                    } else {
-                        // Create new relation
-                        await supabase
-                            .from('event_forms')
-                            .insert([{
-                                event_id: currentEventId,
-                                form_id: formData.formId
-                            }]);
-                    }
-                } else {
-                    // Create new relation for new event
-                    await supabase
-                        .from('event_forms')
-                        .insert([{
-                            event_id: currentEventId,
-                            form_id: formData.formId
-                        }]);
-                }
-            } else {
-                // Remove form association if form was unselected
-                if (isEditMode && eventId) {
-                    await supabase
-                        .from('event_forms')
-                        .delete()
-                        .eq('event_id', currentEventId);
                 }
             }
 
@@ -721,7 +669,7 @@ export default function NewEventPage() {
                 </div>
             )}
 
-            <form className={styles.form}>
+            <form className={styles.form} onSubmit={handleSubmit}>
                 <div className={styles.grid}>
                     {/* Left Column - Main Info */}
                     <div className={styles.column}>
@@ -916,12 +864,10 @@ export default function NewEventPage() {
                                         onChange={handleInputChange}
                                         className={styles.select}
                                     >
-                                        <option value="rascunho">Rascunho</option>
-                                        <option value="publicado">Publicado</option>
-                                        <option value="ativo">Ativo</option>
-                                        <option value="cancelado">Cancelado</option>
-                                        <option value="finalizado">Finalizado</option>
-                                        <option value="arquivado">Arquivado</option>
+                                        <option value="draft">Rascunho</option>
+                                        <option value="published">Publicado</option>
+                                        <option value="ended">Finalizado</option>
+                                        <option value="cancelled">Cancelado</option>
                                     </select>
                                 </div>
                             </div>
@@ -1359,8 +1305,7 @@ export default function NewEventPage() {
                 {/* Action Buttons */}
                 <div className={styles.actions}>
                     <button
-                        type="button"
-                        onClick={handleSubmit}
+                        type="submit"
                         className={styles.publishBtn}
                         disabled={loading || loadingData}
                     >

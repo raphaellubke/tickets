@@ -43,12 +43,12 @@ export default function InviteMemberModal({ isOpen, onClose, onSuccess }: Invite
 
         try {
             // Get user's organization
-            const { data: memberData } = await supabase
+            const { data: members } = await supabase
                 .from('organization_members')
                 .select('organization_id')
                 .eq('user_id', user.id)
-                .eq('status', 'active')
-                .single();
+                .limit(1);
+            const memberData = members?.[0];
 
             if (!memberData) {
                 throw new Error('Organização não encontrada');
@@ -56,7 +56,7 @@ export default function InviteMemberModal({ isOpen, onClose, onSuccess }: Invite
 
             // Generate invite token
             const token = generateInviteToken();
-            
+
             // Create pending member record if email is provided
             if (email) {
                 // Check if member already exists
@@ -65,7 +65,7 @@ export default function InviteMemberModal({ isOpen, onClose, onSuccess }: Invite
                     .select('id')
                     .eq('organization_id', memberData.organization_id)
                     .eq('email', email)
-                    .single();
+                    .maybeSingle();
 
                 if (existingMember) {
                     throw new Error('Este email já está na organização');
@@ -124,12 +124,12 @@ export default function InviteMemberModal({ isOpen, onClose, onSuccess }: Invite
 
         try {
             // Get user's organization
-            const { data: memberData } = await supabase
+            const { data: members2 } = await supabase
                 .from('organization_members')
                 .select('organization_id')
                 .eq('user_id', user.id)
-                .eq('status', 'active')
-                .single();
+                .limit(1);
+            const memberData = members2?.[0];
 
             if (!memberData) {
                 throw new Error('Organização não encontrada');
@@ -141,7 +141,7 @@ export default function InviteMemberModal({ isOpen, onClose, onSuccess }: Invite
                 .select('id')
                 .eq('organization_id', memberData.organization_id)
                 .eq('email', email)
-                .single();
+                .maybeSingle();
 
             if (existingMember) {
                 throw new Error('Este email já está na organização');

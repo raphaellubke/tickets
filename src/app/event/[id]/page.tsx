@@ -4,6 +4,7 @@ import { useState, useEffect, use } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import Header from '@/components/Header/Header';
 import Footer from '@/components/Footer/Footer';
+import WaitlistForm from '@/components/WaitlistForm/WaitlistForm';
 import styles from './page.module.css';
 
 interface TicketGroup {
@@ -174,7 +175,7 @@ export default function EventDetails({ params }: { params: Promise<{ id: string 
                     .from('events')
                     .select('*')
                     .eq('id', eventId)
-                    .single();
+                    .maybeSingle();
 
                 if (eventError || !eventData) {
                     // Se não encontrou no banco, verifica se é um placeholder
@@ -196,16 +197,9 @@ export default function EventDetails({ params }: { params: Promise<{ id: string 
                 setEvent(eventData);
                 setIsPlaceholder(false);
 
-                // Increment views (don't wait for this to complete)
-                supabase
-                    .from('events')
-                    .update({ views: (eventData.views || 0) + 1 })
-                    .eq('id', eventId)
-                    .then(({ error }) => {
-                        if (error) {
-                            console.error('Error incrementing views:', error);
-                        }
-                    });
+                // Incrementar visualizações (fire-and-forget)
+                supabase.rpc('increment_event_views', { p_event_id: eventId });
+
 
                 // Fetch ticket groups
                 const { data: groupsData, error: groupsError } = await supabase
@@ -538,7 +532,13 @@ export default function EventDetails({ params }: { params: Promise<{ id: string 
                                 <p className={styles.ticketSubtitle}>Selecione os ingressos desejados</p>
                             </div>
 
-                            {ticketGroups.length > 0 ? (
+                            {ticketGroups.length > 0 && ticketGroups.every(g => g.ticketTypes.every(t => !t.isActive || t.quantityAvailable <= t.quantitySold)) && event.allow_waitlist ? (
+                                <WaitlistForm
+                                    eventId={eventId}
+                                    organizationId={event.organization_id}
+                                    eventName={event.name}
+                                />
+                            ) : ticketGroups.length > 0 ? (
                                 <>
                                     <div className={styles.ticketGroups}>
                                         {ticketGroups.map((group) => (

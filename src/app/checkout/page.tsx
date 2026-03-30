@@ -1,12 +1,18 @@
 'use client';
 
-import { useState, useEffect, use, Suspense } from 'react';
+import { useState, useEffect, useRef, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/context/AuthContext';
 import Header from '@/components/Header/Header';
 import Footer from '@/components/Footer/Footer';
 import styles from './page.module.css';
+
+declare global {
+    interface Window {
+        MercadoPago: any;
+    }
+}
 
 interface CheckoutTicket {
     ticketTypeId: string;
@@ -18,22 +24,21 @@ interface CheckoutTicket {
 
 interface CheckoutData {
     eventId: string;
-    tickets: Array<{
-        ticketTypeId: string;
-        quantity: number;
-    }>;
+    tickets: Array<{ ticketTypeId: string; quantity: number }>;
     total: number;
 }
+
+type CheckoutStep = 'details' | 'pix' | 'card';
 
 function CheckoutPageContent() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const { user } = useAuth();
     const supabase = createClient();
-    
+
     const eventId = searchParams.get('event');
     const orderId = searchParams.get('order_id');
-    
+
     const [loading, setLoading] = useState(true);
     const [processing, setProcessing] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -41,286 +46,226 @@ function CheckoutPageContent() {
     const [checkoutTickets, setCheckoutTickets] = useState<CheckoutTicket[]>([]);
     const [total, setTotal] = useState(0);
     const [currentOrder, setCurrentOrder] = useState<any>(null);
-    const [customerData, setCustomerData] = useState({
-        name: '',
-        email: '',
-        phone: ''
-    });
+    const [customerData, setCustomerData] = useState({ name: '', email: '', phone: '' });
+    const [cpf, setCpf] = useState('');
     const [paymentMethod, setPaymentMethod] = useState<string>('');
+    const [couponCode, setCouponCode] = useState('');
+    const [appliedCoupon, setAppliedCoupon] = useState<{
+        id: string; code: string; description: string | null;
+        discount_type: string; discount_value: number; discount_amount: number;
+    } | null>(null);
+    const [couponLoading, setCouponLoading] = useState(false);
+    const [couponError, setCouponError] = useState<string | null>(null);
+
+    // Multi-step state
+    const [checkoutStep, setCheckoutStep] = useState<CheckoutStep>('details');
+    const [pixInfo, setPixInfo] = useState<{
+        qrCode: string; qrCodeBase64: string; paymentId: string; dbPaymentId: string;
+    } | null>(null);
+    const [pixCopied, setPixCopied] = useState(false);
+    const pixPollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    const cardFormRef = useRef<any>(null);
+    const mpScriptLoadedRef = useRef(false);
 
     useEffect(() => {
         async function loadCheckoutData() {
             try {
-                // If order_id exists, load existing order
-                if (orderId) {
-                    await loadOrder(orderId);
-                    return;
-                }
+                if (orderId) { await loadOrder(orderId); return; }
+                if (!eventId) { setError('Evento não especificado'); setLoading(false); return; }
 
-                // Otherwise, create new order from checkout data
-                if (!eventId) {
-                    setError('Evento não especificado');
-                    setLoading(false);
-                    return;
-                }
-
-                // Load checkout data from sessionStorage
                 const checkoutDataStr = sessionStorage.getItem('checkoutData');
-                if (!checkoutDataStr) {
-                    setError('Dados do checkout não encontrados');
-                    setLoading(false);
-                    return;
-                }
+                if (!checkoutDataStr) { setError('Dados do checkout não encontrados'); setLoading(false); return; }
 
                 const checkoutData: CheckoutData = JSON.parse(checkoutDataStr);
-                
-                // Load event data
+
                 const { data: eventData, error: eventError } = await supabase
-                    .from('events')
-                    .select('*')
-                    .eq('id', checkoutData.eventId)
-                    .single();
-
-                if (eventError || !eventData) {
-                    setError('Evento não encontrado');
-                    setLoading(false);
-                    return;
-                }
-
+                    .from('events').select('*').eq('id', checkoutData.eventId).single();
+                if (eventError || !eventData) { setError('Evento não encontrado'); setLoading(false); return; }
                 setEvent(eventData);
 
-                // Load ticket types details
                 const ticketsWithDetails = await Promise.all(
                     checkoutData.tickets.map(async (ticket) => {
-                        const { data: ticketType, error: ticketTypeError } = await supabase
-                            .from('event_ticket_types')
-                            .select('*')
-                            .eq('id', ticket.ticketTypeId)
-                            .single();
-
-                        if (ticketTypeError || !ticketType) {
-                            console.error('Error fetching ticket type:', ticketTypeError);
-                            return null;
-                        }
-
-                        // Fetch group name separately if group_id exists
+                        const { data: ticketType } = await supabase
+                            .from('event_ticket_types').select('*').eq('id', ticket.ticketTypeId).single();
+                        if (!ticketType) return null;
                         let groupName = '';
                         if (ticketType.group_id) {
                             const { data: group } = await supabase
-                                .from('event_ticket_groups')
-                                .select('name')
-                                .eq('id', ticketType.group_id)
-                                .single();
+                                .from('event_ticket_groups').select('name').eq('id', ticketType.group_id).single();
                             groupName = group?.name || '';
                         }
-
                         return {
                             ticketTypeId: ticket.ticketTypeId,
                             quantity: ticket.quantity,
                             ticketTypeName: ticketType.name,
                             ticketGroupName: groupName,
-                            price: parseFloat(ticketType.price?.toString() || '0')
+                            price: parseFloat(ticketType.price?.toString() || '0'),
                         };
                     })
                 );
 
-                const validTickets = ticketsWithDetails.filter(t => t !== null) as CheckoutTicket[];
+                const validTickets = ticketsWithDetails.filter(Boolean) as CheckoutTicket[];
                 setCheckoutTickets(validTickets);
                 setTotal(checkoutData.total);
 
-                // Pre-fill customer data if user is logged in
                 if (user) {
                     const { data: profile } = await supabase
-                        .from('profiles')
-                        .select('full_name, email')
-                        .eq('id', user.id)
-                        .single();
-
+                        .from('profiles').select('full_name, email').eq('id', user.id).maybeSingle();
                     if (profile) {
-                        setCustomerData({
-                            name: profile.full_name || '',
-                            email: profile.email || user.email || '',
-                            phone: ''
-                        });
+                        setCustomerData({ name: profile.full_name || '', email: profile.email || user.email || '', phone: '' });
                     }
                 }
             } catch (err: any) {
-                console.error('Error loading checkout data:', err);
                 setError(err.message || 'Erro ao carregar checkout');
             } finally {
                 setLoading(false);
             }
         }
-
         loadCheckoutData();
     }, [eventId, orderId, user]);
 
-    async function loadOrder(orderId: string) {
+    async function loadOrder(oid: string) {
         try {
             const { data: orderData, error: orderError } = await supabase
-                .from('orders')
-                .select(`
-                    *,
-                    events(*)
-                `)
-                .eq('id', orderId)
-                .single();
-
-            if (orderError || !orderData) {
-                setError('Pedido não encontrado');
-                setLoading(false);
-                return;
-            }
+                .from('orders').select('*, events(*)').eq('id', oid).single();
+            if (orderError || !orderData) { setError('Pedido não encontrado'); setLoading(false); return; }
 
             setCurrentOrder(orderData);
             setEvent(orderData.events);
             setTotal(parseFloat(orderData.total_amount?.toString() || '0'));
 
-            // Load order items
-            const { data: orderItems, error: orderItemsError } = await supabase
-                .from('order_items')
-                .select('*')
-                .eq('order_id', orderId);
-
-            if (orderItemsError) {
-                console.error('Error fetching order items:', orderItemsError);
-            }
-
-            if (orderItems && orderItems.length > 0) {
-                // Fetch ticket types and groups separately
+            const { data: orderItems } = await supabase.from('order_items').select('*').eq('order_id', oid);
+            if (orderItems?.length) {
                 const ticketsWithDetails = await Promise.all(
                     orderItems.map(async (item) => {
                         const { data: ticketType } = await supabase
-                            .from('event_ticket_types')
-                            .select('name, group_id')
-                            .eq('id', item.ticket_type_id)
-                            .single();
-
+                            .from('event_ticket_types').select('name, group_id').eq('id', item.ticket_type_id).single();
                         let groupName = '';
                         if (ticketType?.group_id) {
                             const { data: group } = await supabase
-                                .from('event_ticket_groups')
-                                .select('name')
-                                .eq('id', ticketType.group_id)
-                                .single();
+                                .from('event_ticket_groups').select('name').eq('id', ticketType.group_id).single();
                             groupName = group?.name || '';
                         }
-
                         return {
                             ticketTypeId: item.ticket_type_id,
                             quantity: item.quantity,
                             ticketTypeName: ticketType?.name || '',
                             ticketGroupName: groupName,
-                            price: parseFloat(item.unit_price?.toString() || '0')
+                            price: parseFloat(item.unit_price?.toString() || '0'),
                         };
                     })
                 );
-
                 setCheckoutTickets(ticketsWithDetails);
             }
 
-            // Load customer data from order
             setCustomerData({
                 name: orderData.participant_name || '',
                 email: orderData.participant_email || '',
-                phone: orderData.participant_phone || ''
+                phone: orderData.participant_phone || '',
             });
-
             setPaymentMethod(orderData.payment_method || '');
         } catch (err: any) {
-            console.error('Error loading order:', err);
             setError(err.message || 'Erro ao carregar pedido');
         } finally {
             setLoading(false);
         }
     }
 
+    async function applyCoupon() {
+        if (!couponCode.trim() || !event) return;
+        setCouponLoading(true);
+        setCouponError(null);
+        setAppliedCoupon(null);
+        try {
+            const { data, error: rpcError } = await supabase.rpc('validate_coupon', {
+                p_code: couponCode.trim(),
+                p_organization_id: event.organization_id,
+                p_event_id: event.id,
+                p_order_amount: total,
+            });
+            if (rpcError) throw rpcError;
+            const result = data?.[0];
+            if (!result?.is_valid) { setCouponError(result?.error_message || 'Cupom inválido'); return; }
+            setAppliedCoupon({
+                id: result.id, code: result.code, description: result.description,
+                discount_type: result.discount_type, discount_value: result.discount_value,
+                discount_amount: result.discount_amount,
+            });
+        } catch (err: any) {
+            setCouponError(err.message || 'Erro ao validar cupom');
+        } finally {
+            setCouponLoading(false);
+        }
+    }
+
     async function createOrder() {
-        if (!event) {
-            setError('Evento não encontrado');
-            return null;
-        }
-
-        if (!customerData.name || !customerData.email) {
-            setError('Preencha nome e e-mail');
-            return null;
-        }
-
-        if (checkoutTickets.length === 0) {
-            setError('Nenhum ingresso selecionado');
-            return null;
-        }
+        if (!event) { setError('Evento não encontrado'); return null; }
+        if (!customerData.name || !customerData.email) { setError('Preencha nome e e-mail'); return null; }
+        if (checkoutTickets.length === 0) { setError('Nenhum ingresso selecionado'); return null; }
 
         try {
-            // Get organization_id from event
-            const { data: eventData } = await supabase
-                .from('events')
-                .select('organization_id')
-                .eq('id', event.id)
-                .single();
+            for (const ticket of checkoutTickets) {
+                const { data: ticketType } = await supabase
+                    .from('event_ticket_types')
+                    .select('quantity_available, quantity_sold, name')
+                    .eq('id', ticket.ticketTypeId).single();
+                if (!ticketType) { setError('Ingresso não encontrado'); return null; }
+                const available = (ticketType.quantity_available || 0) - (ticketType.quantity_sold || 0);
+                if (ticket.quantity > available) {
+                    setError(available <= 0
+                        ? `"${ticketType.name}" está esgotado`
+                        : `"${ticketType.name}": apenas ${available} disponível(is)`);
+                    return null;
+                }
+            }
 
-            // Generate order number
+            const { data: eventData } = await supabase.from('events').select('organization_id').eq('id', event.id).single();
+            const discountAmount = appliedCoupon?.discount_amount || 0;
+            const finalTotal = Math.max(0, total - discountAmount);
             const orderNumber = `ORD-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
-
-            // Create order with event_id and user_id
-            const orderInsert: any = {
-                event_id: event.id, // Always link to event
-                user_id: user?.id || null, // Link to user if authenticated
-                organization_id: eventData?.organization_id || null,
-                participant_name: customerData.name,
-                participant_email: customerData.email,
-                participant_phone: customerData.phone || null,
-                payment_status: 'pending',
-                total_amount: total,
-                quantity: checkoutTickets.reduce((sum, t) => sum + t.quantity, 0),
-                order_number: orderNumber
-            };
 
             const { data: orderData, error: orderError } = await supabase
                 .from('orders')
-                .insert(orderInsert)
-                .select()
-                .single();
+                .insert({
+                    event_id: event.id,
+                    user_id: user?.id || null,
+                    organization_id: eventData?.organization_id || null,
+                    participant_name: customerData.name,
+                    participant_email: customerData.email,
+                    participant_phone: customerData.phone || null,
+                    payment_status: 'pending',
+                    total_amount: finalTotal,
+                    discount_amount: discountAmount,
+                    coupon_id: appliedCoupon?.id || null,
+                    quantity: checkoutTickets.reduce((s, t) => s + t.quantity, 0),
+                    order_number: orderNumber,
+                })
+                .select().single();
 
-            if (orderError) {
-                console.error('Error creating order:', orderError);
-                setError('Erro ao criar pedido: ' + orderError.message);
-                return null;
-            }
+            if (orderError) { setError('Erro ao criar pedido: ' + orderError.message); return null; }
 
-            // Create order items
-            // Note: subtotal is a generated column, so we don't include it in the insert
             const orderItems = checkoutTickets.map(ticket => ({
                 order_id: orderData.id,
                 ticket_type_id: ticket.ticketTypeId,
                 quantity: ticket.quantity,
-                unit_price: ticket.price
+                unit_price: ticket.price,
+                total_price: ticket.quantity * parseFloat(ticket.price.toString()),
             }));
 
-            const { error: itemsError } = await supabase
-                .from('order_items')
-                .insert(orderItems);
+            const { error: itemsError } = await supabase.from('order_items').insert(orderItems);
+            if (itemsError) { setError('Erro ao criar itens do pedido'); return null; }
 
-            if (itemsError) {
-                console.error('Error creating order items:', itemsError);
-                setError('Erro ao criar itens do pedido');
-                return null;
+            const itemsSubtotal = orderItems.reduce((s, i) => s + i.total_price, 0);
+            const finalOrderTotal = Math.max(0, itemsSubtotal - discountAmount);
+            await supabase.from('orders').update({ total_amount: finalOrderTotal }).eq('id', orderData.id);
+
+            if (appliedCoupon?.id) {
+                await supabase.rpc('increment_coupon_uses', { p_coupon_id: appliedCoupon.id });
             }
-
-            // Update order total (recalculate from items)
-            // Since subtotal is a generated column, we calculate it manually
-            const calculatedTotal = orderItems.reduce((sum, item) => {
-                return sum + (item.quantity * parseFloat(item.unit_price.toString()));
-            }, 0);
-            await supabase
-                .from('orders')
-                .update({ total_amount: calculatedTotal })
-                .eq('id', orderData.id);
 
             setCurrentOrder(orderData);
             return orderData;
         } catch (err: any) {
-            console.error('Error creating order:', err);
             setError(err.message || 'Erro ao criar pedido');
             return null;
         }
@@ -328,161 +273,62 @@ function CheckoutPageContent() {
 
     async function processApprovedPayment(orderId: string) {
         try {
-            // 1. Update order status
-            await supabase
+            const { data: updatedOrders } = await supabase
                 .from('orders')
-                .update({
-                    payment_status: 'paid',
-                    paid_at: new Date().toISOString(),
-                    updated_at: new Date().toISOString()
-                })
-                .eq('id', orderId);
+                .update({ payment_status: 'paid', paid_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+                .eq('id', orderId).eq('payment_status', 'pending').select('id');
 
-            // 2. Get order items
-            const { data: orderItems, error: orderItemsError } = await supabase
-                .from('order_items')
-                .select('*')
-                .eq('order_id', orderId);
+            if (!updatedOrders || updatedOrders.length === 0) return [];
 
-            if (orderItemsError) {
-                console.error('Error fetching order items:', orderItemsError);
-                throw orderItemsError;
-            }
+            const { data: orderItems } = await supabase.from('order_items').select('*').eq('order_id', orderId);
+            if (!orderItems?.length) return;
 
-            if (!orderItems || orderItems.length === 0) {
-                console.error('No order items found for order:', orderId);
-                return;
-            }
+            const { data: order } = await supabase.from('orders').select('*').eq('id', orderId).single();
+            if (!order) return;
 
-            console.log(`Found ${orderItems.length} order items for order ${orderId}`);
-
-            // 3. Get order details
-            const { data: order } = await supabase
-                .from('orders')
-                .select('*')
-                .eq('id', orderId)
-                .single();
-
-            if (!order) {
-                console.error('Order not found');
-                return;
-            }
-
-            // 4. Generate tickets for each order item
             const tickets = [];
             for (const item of orderItems) {
-                // Validate required fields
-                if (!order.event_id) {
-                    console.error('Order missing event_id:', order);
-                    continue;
-                }
-                if (!item.ticket_type_id) {
-                    console.error('Order item missing ticket_type_id:', item);
-                    continue;
-                }
-
+                if (!order.event_id || !item.ticket_type_id) continue;
                 for (let i = 0; i < item.quantity; i++) {
-                    // Generate unique ticket code
                     const ticketCode = `TKT-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
-                    
-                    const ticketData = {
-                        order_id: orderId,
-                        event_id: order.event_id,
-                        ticket_type_id: item.ticket_type_id,
-                        ticket_code: ticketCode,
-                        price: parseFloat(item.unit_price?.toString() || '0'),
-                        status: 'active',
-                        organization_id: order.organization_id || null
-                    };
-
-                    console.log('Creating ticket with data:', ticketData);
-
                     const { data: ticket, error: ticketError } = await supabase
                         .from('tickets')
-                        .insert(ticketData)
-                        .select()
-                        .single();
+                        .insert({
+                            order_id: orderId,
+                            event_id: order.event_id,
+                            ticket_type_id: item.ticket_type_id,
+                            ticket_code: ticketCode,
+                            status: 'active',
+                            organization_id: order.organization_id || null,
+                        })
+                        .select().single();
 
-                    if (ticketError) {
-                        console.error('Error creating ticket:', ticketError);
-                        console.error('Ticket data:', ticketData);
-                        console.error('Order data:', order);
-                        console.error('Item data:', item);
-                        // Don't continue silently - log the error but still try to create other tickets
-                        continue;
-                    }
-
-                    if (!ticket) {
-                        console.error('Ticket created but no data returned');
-                        continue;
-                    }
-
+                    if (ticketError || !ticket) continue;
                     tickets.push(ticket);
 
-                    // 5. Create form response if event has form
-                    if (order.event_id) {
-                        const { data: eventData } = await supabase
-                            .from('events')
-                            .select('form_id, require_form')
-                            .eq('id', order.event_id)
-                            .single();
+                    const { data: eventData } = await supabase
+                        .from('events').select('form_id, require_form').eq('id', order.event_id).maybeSingle();
 
-                        if (eventData?.form_id) {
-                            // Create form_response
-                            const { data: formResponse, error: responseError } = await supabase
-                                .from('form_responses')
-                                .insert({
-                                    form_id: eventData.form_id,
-                                    ticket_id: ticket.id,
-                                    user_id: order.user_id,
-                                    status: 'pending'
-                                })
-                                .select()
-                                .single();
+                    if (eventData?.form_id) {
+                        const { data: formResponse } = await supabase
+                            .from('form_responses')
+                            .insert({ form_id: eventData.form_id, ticket_id: ticket.id, user_id: order.user_id, status: 'pending' })
+                            .select().single();
 
-                            if (!responseError && formResponse) {
-                                // Get form fields
-                                const { data: formFields } = await supabase
-                                    .from('form_fields')
-                                    .select('id')
-                                    .eq('form_id', eventData.form_id)
-                                    .order('order_index', { ascending: true });
-
-                                if (formFields && formFields.length > 0) {
-                                    // Create empty answers for each field
-                                    const answers = formFields.map(field => ({
-                                        response_id: formResponse.id,
-                                        field_id: field.id,
-                                        value: null
-                                    }));
-
-                                    await supabase
-                                        .from('form_response_answers')
-                                        .insert(answers);
-                                }
+                        if (formResponse) {
+                            const { data: formFields } = await supabase
+                                .from('form_fields').select('id').eq('form_id', eventData.form_id).order('order_index', { ascending: true });
+                            if (formFields?.length) {
+                                await supabase.from('form_response_answers').insert(
+                                    formFields.map(f => ({ response_id: formResponse.id, field_id: f.id, value: null }))
+                                );
                             }
                         }
                     }
 
-                    // 6. Update ticket type stock (increment quantity_sold)
-                    const { data: ticketType } = await supabase
-                        .from('event_ticket_types')
-                        .select('quantity_sold')
-                        .eq('id', item.ticket_type_id)
-                        .single();
-
-                    if (ticketType) {
-                        await supabase
-                            .from('event_ticket_types')
-                            .update({
-                                quantity_sold: (ticketType.quantity_sold || 0) + 1
-                            })
-                            .eq('id', item.ticket_type_id);
-                    }
+                    await supabase.rpc('increment_quantity_sold', { p_ticket_type_id: item.ticket_type_id });
                 }
             }
-
-            console.log(`Processed payment for order ${orderId}: ${tickets.length} tickets created`);
             return tickets;
         } catch (error: any) {
             console.error('Error processing approved payment:', error);
@@ -490,107 +336,262 @@ function CheckoutPageContent() {
         }
     }
 
-    async function handlePayment(method: string) {
-        if (!currentOrder) {
-            const order = await createOrder();
-            if (!order) return;
+    // Cleanup polling on unmount
+    useEffect(() => {
+        return () => { if (pixPollingRef.current) clearInterval(pixPollingRef.current); };
+    }, []);
+
+    // Load MP.js when on card step
+    useEffect(() => {
+        if (checkoutStep !== 'card') return;
+        const PUBLIC_KEY = process.env.NEXT_PUBLIC_MERCADOPAGO_PUBLIC_KEY;
+        if (!PUBLIC_KEY) { setError('Chave de pagamento não configurada'); return; }
+
+        const initCardForm = () => {
+            if (cardFormRef.current) return; // already mounted
+            const finalTotal = Math.max(0, total - (appliedCoupon?.discount_amount || 0));
+            const mp = new window.MercadoPago(PUBLIC_KEY, { locale: 'pt-BR' });
+            cardFormRef.current = mp.cardForm({
+                amount: String(finalTotal > 0 ? finalTotal : 1),
+                iframe: true,
+                form: {
+                    id: 'form-checkout',
+                    cardholderName: { id: 'form-checkout__cardholderName', placeholder: 'Nome como no cartão' },
+                    cardholderEmail: { id: 'form-checkout__cardholderEmail', placeholder: 'E-mail' },
+                    cardNumber: { id: 'form-checkout__cardNumber', placeholder: 'Número do cartão' },
+                    expirationDate: { id: 'form-checkout__expirationDate', placeholder: 'MM/AA' },
+                    securityCode: { id: 'form-checkout__securityCode', placeholder: 'CVV' },
+                    installments: { id: 'form-checkout__installments' },
+                    identificationType: { id: 'form-checkout__identificationType' },
+                    identificationNumber: { id: 'form-checkout__identificationNumber', placeholder: 'CPF/CNPJ' },
+                    issuer: { id: 'form-checkout__issuer' },
+                },
+                callbacks: {
+                    onFormMounted: (err: any) => { if (err) setError('Erro ao carregar campos do cartão'); },
+                    onSubmit: async (event: any) => {
+                        event.preventDefault();
+                        const data = cardFormRef.current.getCardFormData();
+                        await handleCardSubmit(data);
+                    },
+                },
+            });
+        };
+
+        if (window.MercadoPago) {
+            initCardForm();
+        } else if (!mpScriptLoadedRef.current) {
+            mpScriptLoadedRef.current = true;
+            const script = document.createElement('script');
+            script.src = 'https://sdk.mercadopago.com/js/v2';
+            script.onload = () => initCardForm();
+            script.onerror = () => setError('Erro ao carregar SDK de pagamento');
+            document.head.appendChild(script);
         }
+    }, [checkoutStep]);
+
+    async function handleContinue() {
+        if (!customerData.name || !customerData.email) { setError('Preencha nome e e-mail'); return; }
+
+        const finalTotal = Math.max(0, total - (appliedCoupon?.discount_amount || 0));
+
+        // Free event — no payment needed
+        if (finalTotal === 0) {
+            setProcessing(true);
+            setError(null);
+            try {
+                const order = currentOrder || await createOrder();
+                if (!order) { setProcessing(false); return; }
+                await handleFreePayment(order);
+            } finally {
+                setProcessing(false);
+            }
+            return;
+        }
+
+        if (!paymentMethod) { setError('Selecione um método de pagamento'); return; }
 
         setProcessing(true);
         setError(null);
-
         try {
             const order = currentOrder || await createOrder();
-            if (!order) return;
+            if (!order) { setProcessing(false); return; }
 
-            // Create payment record with event_id and user_id
-            const { data: paymentData, error: paymentError } = await supabase
-                .from('payments')
-                .insert({
-                    order_id: order.id,
-                    event_id: order.event_id,
-                    user_id: order.user_id,
-                    amount: total,
-                    payment_method: method,
-                    payment_provider: method === 'pix' ? 'efi' : method === 'card' ? 'stripe' : method,
-                    status: 'processing'
-                })
-                .select()
-                .single();
-
-            if (paymentError) {
-                console.error('Error creating payment:', paymentError);
-                setError('Erro ao processar pagamento');
-                setProcessing(false);
-                return;
+            if (paymentMethod === 'pix') {
+                await handlePixPayment(order, finalTotal);
+            } else if (paymentMethod === 'card') {
+                setCheckoutStep('card');
             }
-
-            // Update order with payment method
-            await supabase
-                .from('orders')
-                .update({ payment_method: method })
-                .eq('id', order.id);
-
-            // Simulate payment approval (wait 1 second to show processing)
-            await new Promise(resolve => setTimeout(resolve, 1000));
-
-            // Update payment to paid
-            await supabase
-                .from('payments')
-                .update({
-                    status: 'paid',
-                    paid_at: new Date().toISOString(),
-                    updated_at: new Date().toISOString()
-                })
-                .eq('id', paymentData.id);
-
-            // Process approved payment (generate tickets, forms, etc.)
-            await processApprovedPayment(order.id);
-
-            // Clear checkout data from sessionStorage
-            sessionStorage.removeItem('checkoutData');
-
-            // Redirect to success page
-            router.push(`/checkout/success?order_id=${order.id}`);
         } catch (err: any) {
-            console.error('Error processing payment:', err);
-            setError(err.message || 'Erro ao processar pagamento');
+            setError(err.message || 'Erro ao processar');
         } finally {
+            setProcessing(false);
+        }
+    }
+
+    async function handleFreePayment(order: any) {
+        // Free events — no payment record needed, just process tickets directly
+        await processApprovedPayment(order.id);
+        sessionStorage.removeItem('checkoutData');
+        router.push(`/checkout/success?order_id=${order.id}`);
+    }
+
+    async function handlePixPayment(order: any, finalTotal: number) {
+        const { data: paymentData, error: paymentError } = await supabase
+            .from('payments')
+            .insert({
+                order_id: order.id,
+                event_id: order.event_id,
+                user_id: order.user_id,
+                amount: finalTotal,
+                payment_method: 'pix',
+                payment_provider: 'mercadopago',
+                status: 'pending',
+            })
+            .select().single();
+
+        if (paymentError) { setError('Erro ao iniciar pagamento PIX'); return; }
+
+        const res = await fetch('/api/mercadopago/create-pix', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                orderId: order.id,
+                amount: finalTotal,
+                payerEmail: customerData.email,
+                payerName: customerData.name,
+                payerCpf: cpf.replace(/\D/g, ''),
+            }),
+        });
+
+        const pixResult = await res.json();
+        if (!res.ok || pixResult.error) {
+            setError(pixResult.error || 'Erro ao gerar QR Code PIX');
+            await supabase.from('payments').update({ status: 'failed' }).eq('id', paymentData.id);
+            return;
+        }
+
+        await supabase.from('payments').update({ payment_provider_id: pixResult.paymentId }).eq('id', paymentData.id);
+        await supabase.from('orders').update({ payment_method: 'pix' }).eq('id', order.id);
+
+        setPixInfo({
+            qrCode: pixResult.qrCode,
+            qrCodeBase64: pixResult.qrCodeBase64,
+            paymentId: pixResult.paymentId,
+            dbPaymentId: paymentData.id,
+        });
+        setCurrentOrder(order);
+        setCheckoutStep('pix');
+        startPixPolling(pixResult.paymentId, order.id, paymentData.id);
+    }
+
+    function startPixPolling(mpPaymentId: string, orderId: string, dbPaymentId: string) {
+        pixPollingRef.current = setInterval(async () => {
+            try {
+                const res = await fetch(`/api/mercadopago/check-payment?payment_id=${mpPaymentId}`);
+                const data = await res.json();
+                if (data.status === 'approved') {
+                    clearInterval(pixPollingRef.current!);
+                    await supabase.from('payments').update({
+                        status: 'paid',
+                        paid_at: new Date().toISOString(),
+                        updated_at: new Date().toISOString(),
+                    }).eq('id', dbPaymentId);
+                    await processApprovedPayment(orderId);
+                    sessionStorage.removeItem('checkoutData');
+                    router.push(`/checkout/success?order_id=${orderId}`);
+                } else if (data.status === 'rejected' || data.status === 'cancelled') {
+                    clearInterval(pixPollingRef.current!);
+                    setError('Pagamento PIX não identificado. Tente novamente.');
+                    setCheckoutStep('details');
+                }
+            } catch {}
+        }, 3000);
+    }
+
+    async function handleCardSubmit(formData: any) {
+        setProcessing(true);
+        setError(null);
+        const { token, installments, paymentMethodId, issuerId } = formData;
+        const order = currentOrder;
+        if (!order || !token) { setError('Erro ao processar cartão. Tente novamente.'); setProcessing(false); return; }
+
+        const finalTotal = Math.max(0, total - (appliedCoupon?.discount_amount || 0));
+
+        const { data: paymentData, error: paymentError } = await supabase
+            .from('payments')
+            .insert({
+                order_id: order.id,
+                event_id: order.event_id,
+                user_id: order.user_id,
+                amount: finalTotal,
+                payment_method: 'card',
+                payment_provider: 'mercadopago',
+                status: 'processing',
+            })
+            .select().single();
+
+        if (paymentError) { setError('Erro ao registrar pagamento'); setProcessing(false); return; }
+
+        const res = await fetch('/api/mercadopago/create-card', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                orderId: order.id,
+                amount: finalTotal,
+                token,
+                installments,
+                paymentMethodId,
+                issuerId,
+                payerEmail: customerData.email,
+                payerCpf: cpf.replace(/\D/g, ''),
+                payerName: customerData.name,
+            }),
+        });
+
+        const result = await res.json();
+
+        if (!res.ok || result.error) {
+            await supabase.from('payments').update({ status: 'rejected' }).eq('id', paymentData.id);
+            setError(result.error || 'Pagamento recusado. Verifique os dados e tente novamente.');
+            setProcessing(false);
+            return;
+        }
+
+        if (result.status === 'approved') {
+            await supabase.from('payments').update({
+                status: 'paid',
+                payment_provider_id: result.paymentId,
+                paid_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+            }).eq('id', paymentData.id);
+            await supabase.from('orders').update({ payment_method: 'card' }).eq('id', order.id);
+            await processApprovedPayment(order.id);
+            sessionStorage.removeItem('checkoutData');
+            router.push(`/checkout/success?order_id=${order.id}`);
+        } else {
+            await supabase.from('payments').update({ status: result.status, payment_provider_id: result.paymentId }).eq('id', paymentData.id);
+            setError('Pagamento em análise. Tente outro cartão ou use PIX.');
             setProcessing(false);
         }
     }
 
     const formatPrice = (price: number) => {
         if (price === 0) return 'Gratuito';
-        return new Intl.NumberFormat('pt-BR', {
-            style: 'currency',
-            currency: 'BRL',
-        }).format(price);
+        return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(price);
     };
 
     const formatPhone = (value: string) => {
-        // Remove tudo que não é dígito
-        const numbers = value.replace(/\D/g, '');
-        
-        // Aplica a máscara
-        if (numbers.length <= 10) {
-            // Telefone fixo: (00) 0000-0000
-            return numbers
-                .replace(/(\d{2})(\d)/, '($1) $2')
-                .replace(/(\d{4})(\d)/, '$1-$2');
-        } else {
-            // Celular: (00) 00000-0000
-            return numbers
-                .replace(/(\d{2})(\d)/, '($1) $2')
-                .replace(/(\d{5})(\d)/, '$1-$2')
-                .substring(0, 15); // Limita a 15 caracteres
-        }
+        const n = value.replace(/\D/g, '');
+        if (n.length <= 10) return n.replace(/(\d{2})(\d)/, '($1) $2').replace(/(\d{4})(\d)/, '$1-$2');
+        return n.replace(/(\d{2})(\d)/, '($1) $2').replace(/(\d{5})(\d)/, '$1-$2').substring(0, 15);
     };
 
-    const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const formatted = formatPhone(e.target.value);
-        setCustomerData({ ...customerData, phone: formatted });
+    const formatCpf = (value: string) => {
+        const n = value.replace(/\D/g, '');
+        return n.replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d{1,2})/, '$1-$2').substring(0, 14);
     };
+
+    const finalTotal = Math.max(0, total - (appliedCoupon?.discount_amount || 0));
 
     if (loading) {
         return (
@@ -598,7 +599,7 @@ function CheckoutPageContent() {
                 <Header />
                 <div className={styles.loadingContainer}>
                     <div className={styles.spinner}></div>
-                    <p>Carregando checkout...</p>
+                    <p>Carregando...</p>
                 </div>
                 <Footer />
             </main>
@@ -612,9 +613,7 @@ function CheckoutPageContent() {
                 <div className={styles.errorContainer}>
                     <h2>Erro</h2>
                     <p>{error}</p>
-                    <button onClick={() => router.back()} className={styles.backButton}>
-                        Voltar
-                    </button>
+                    <button onClick={() => router.back()} className={styles.backButton}>Voltar</button>
                 </div>
                 <Footer />
             </main>
@@ -626,170 +625,331 @@ function CheckoutPageContent() {
             <Header />
 
             <div className={styles.container}>
-                <div className={styles.content}>
-                    {/* Left Column - Order Summary */}
-                    <div className={styles.summarySection}>
-                        <h2 className={styles.sectionTitle}>Resumo do Pedido</h2>
-                        
-                        {event && (
-                            <div className={styles.eventCard}>
-                                <h3 className={styles.eventName}>{event.name}</h3>
-                                <div className={styles.eventMeta}>
-                                    {event.event_date && (
-                                        <span>📅 {new Date(event.event_date).toLocaleDateString('pt-BR')}</span>
-                                    )}
-                                    {event.location && (
-                                        <span>📍 {event.location}</span>
-                                    )}
-                                </div>
-                            </div>
-                        )}
+                {/* ─── STEP: DETAILS ─── */}
+                {checkoutStep === 'details' && (
+                    <div className={styles.content}>
+                        {/* Left — Order Summary */}
+                        <div className={styles.summarySection}>
+                            <h2 className={styles.sectionTitle}>Resumo do Pedido</h2>
 
-                        <div className={styles.ticketsList}>
-                            <h4 className={styles.ticketsTitle}>Ingressos</h4>
-                            {checkoutTickets.map((ticket, index) => (
-                                <div key={index} className={styles.ticketItem}>
-                                    <div className={styles.ticketInfo}>
-                                        {ticket.ticketGroupName && (
-                                            <span className={styles.ticketGroup}>{ticket.ticketGroupName}</span>
+                            {event && (
+                                <div className={styles.eventCard}>
+                                    <h3 className={styles.eventName}>{event.name}</h3>
+                                    <div className={styles.eventMeta}>
+                                        {event.event_date && (
+                                            <span>{new Date(event.event_date).toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}</span>
                                         )}
-                                        <span className={styles.ticketName}>{ticket.ticketTypeName}</span>
-                                        <span className={styles.ticketQuantity}>x{ticket.quantity}</span>
+                                        {event.location && <span>{event.location}</span>}
                                     </div>
-                                    <span className={styles.ticketPrice}>
-                                        {formatPrice(ticket.price * ticket.quantity)}
-                                    </span>
                                 </div>
-                            ))}
+                            )}
+
+                            <div className={styles.ticketsList}>
+                                <h4 className={styles.ticketsTitle}>Ingressos</h4>
+                                {checkoutTickets.map((ticket, i) => (
+                                    <div key={i} className={styles.ticketItem}>
+                                        <div className={styles.ticketInfo}>
+                                            {ticket.ticketGroupName && <span className={styles.ticketGroup}>{ticket.ticketGroupName}</span>}
+                                            <span className={styles.ticketName}>{ticket.ticketTypeName}</span>
+                                            <span className={styles.ticketQuantity}>x{ticket.quantity}</span>
+                                        </div>
+                                        <span className={styles.ticketPrice}>{formatPrice(ticket.price * ticket.quantity)}</span>
+                                    </div>
+                                ))}
+                            </div>
+
+                            {/* Coupon */}
+                            <div className={styles.couponSection}>
+                                <div className={styles.couponRow}>
+                                    <input
+                                        type="text"
+                                        className={styles.couponInput}
+                                        placeholder="Código do cupom"
+                                        value={couponCode}
+                                        onChange={(e) => { setCouponCode(e.target.value.toUpperCase()); if (appliedCoupon) setAppliedCoupon(null); setCouponError(null); }}
+                                        disabled={!!appliedCoupon}
+                                    />
+                                    {appliedCoupon ? (
+                                        <button type="button" className={styles.couponRemoveBtn} onClick={() => { setAppliedCoupon(null); setCouponCode(''); }}>Remover</button>
+                                    ) : (
+                                        <button type="button" className={styles.couponApplyBtn} onClick={applyCoupon} disabled={!couponCode.trim() || couponLoading}>
+                                            {couponLoading ? '...' : 'Aplicar'}
+                                        </button>
+                                    )}
+                                </div>
+                                {couponError && <p className={styles.couponError}>{couponError}</p>}
+                                {appliedCoupon && (
+                                    <div className={styles.couponApplied}>
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                                        <span>Cupom <strong>{appliedCoupon.code}</strong> aplicado</span>
+                                        <span className={styles.couponDiscount}>-{formatPrice(appliedCoupon.discount_amount)}</span>
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className={styles.totalSection}>
+                                {appliedCoupon && (
+                                    <>
+                                        <div className={styles.totalRow} style={{ color: '#6b7280', fontSize: '0.875rem' }}>
+                                            <span>Subtotal</span><span>{formatPrice(total)}</span>
+                                        </div>
+                                        <div className={styles.totalRow} style={{ color: '#16a34a', fontSize: '0.875rem' }}>
+                                            <span>Desconto</span><span>-{formatPrice(appliedCoupon.discount_amount)}</span>
+                                        </div>
+                                    </>
+                                )}
+                                <div className={styles.totalRow}>
+                                    <span className={styles.totalLabel}>Total</span>
+                                    <span className={styles.totalPrice}>{formatPrice(finalTotal)}</span>
+                                </div>
+                            </div>
                         </div>
 
-                        <div className={styles.totalSection}>
-                            <div className={styles.totalRow}>
-                                <span className={styles.totalLabel}>Total</span>
-                                <span className={styles.totalPrice}>{formatPrice(total)}</span>
+                        {/* Right — Customer Info + Payment */}
+                        <div className={styles.formSection}>
+                            <h2 className={styles.sectionTitle}>Dados do Comprador</h2>
+
+                            <div className={styles.formGroup}>
+                                <label className={styles.label}>Nome Completo *</label>
+                                <input type="text" value={customerData.name} onChange={(e) => setCustomerData({ ...customerData, name: e.target.value })} className={styles.input} placeholder="Seu nome completo" />
                             </div>
+                            <div className={styles.formGroup}>
+                                <label className={styles.label}>E-mail *</label>
+                                <input type="email" value={customerData.email} onChange={(e) => setCustomerData({ ...customerData, email: e.target.value })} className={styles.input} placeholder="seu@email.com" />
+                            </div>
+                            <div className={styles.formRow2}>
+                                <div className={styles.formGroup}>
+                                    <label className={styles.label}>Telefone</label>
+                                    <input type="tel" value={customerData.phone} onChange={(e) => setCustomerData({ ...customerData, phone: formatPhone(e.target.value) })} className={styles.input} placeholder="(00) 00000-0000" maxLength={15} />
+                                </div>
+                                <div className={styles.formGroup}>
+                                    <label className={styles.label}>CPF</label>
+                                    <input type="text" value={cpf} onChange={(e) => setCpf(formatCpf(e.target.value))} className={styles.input} placeholder="000.000.000-00" maxLength={14} />
+                                </div>
+                            </div>
+
+                            {finalTotal > 0 && (
+                                <div className={styles.paymentSection}>
+                                    <h3 className={styles.paymentTitle}>Forma de Pagamento</h3>
+                                    <div className={styles.paymentMethods}>
+                                        <button
+                                            type="button"
+                                            className={`${styles.paymentMethod} ${paymentMethod === 'pix' ? styles.selected : ''}`}
+                                            onClick={() => setPaymentMethod('pix')}
+                                        >
+                                            <div className={styles.paymentIconWrap}>
+                                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                                    <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/>
+                                                    <rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>
+                                                </svg>
+                                            </div>
+                                            <div>
+                                                <div className={styles.paymentName}>PIX</div>
+                                                <div className={styles.paymentDesc}>Aprovação imediata</div>
+                                            </div>
+                                        </button>
+
+                                        <button
+                                            type="button"
+                                            className={`${styles.paymentMethod} ${paymentMethod === 'card' ? styles.selected : ''}`}
+                                            onClick={() => setPaymentMethod('card')}
+                                        >
+                                            <div className={styles.paymentIconWrap}>
+                                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                                    <rect x="1" y="4" width="22" height="16" rx="2" ry="2"/>
+                                                    <line x1="1" y1="10" x2="23" y2="10"/>
+                                                </svg>
+                                            </div>
+                                            <div>
+                                                <div className={styles.paymentName}>Cartão de Crédito</div>
+                                                <div className={styles.paymentDesc}>Parcelamento disponível</div>
+                                            </div>
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+
+                            {error && (
+                                <div className={styles.errorAlert}>
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                                    {error}
+                                </div>
+                            )}
+
+                            <button
+                                className={styles.checkoutButton}
+                                onClick={handleContinue}
+                                disabled={!customerData.name || !customerData.email || processing || (finalTotal > 0 && !paymentMethod)}
+                            >
+                                {processing ? 'Processando...' : finalTotal === 0 ? `Confirmar Inscrição` : `Continuar — ${formatPrice(finalTotal)}`}
+                            </button>
+
+                            <p className={styles.disclaimer}>
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                                Seus dados estão seguros e protegidos
+                            </p>
                         </div>
                     </div>
+                )}
 
-                    {/* Right Column - Customer Info & Payment */}
-                    <div className={styles.formSection}>
-                        <h2 className={styles.sectionTitle}>Dados do Comprador</h2>
-                        
-                        <div className={styles.formGroup}>
-                            <label htmlFor="name" className={styles.label}>
-                                Nome Completo *
-                            </label>
-                            <input
-                                type="text"
-                                id="name"
-                                value={customerData.name}
-                                onChange={(e) => setCustomerData({ ...customerData, name: e.target.value })}
-                                className={styles.input}
-                                placeholder="Seu nome completo"
-                                required
-                            />
-                        </div>
+                {/* ─── STEP: PIX ─── */}
+                {checkoutStep === 'pix' && (
+                    <div className={styles.pixWrapper}>
+                        <div className={styles.pixCard}>
+                            <h2 className={styles.pixTitle}>Pague com PIX</h2>
+                            <p className={styles.pixSubtitle}>Escaneie o QR Code ou copie o código abaixo</p>
 
-                        <div className={styles.formGroup}>
-                            <label htmlFor="email" className={styles.label}>
-                                E-mail *
-                            </label>
-                            <input
-                                type="email"
-                                id="email"
-                                value={customerData.email}
-                                onChange={(e) => setCustomerData({ ...customerData, email: e.target.value })}
-                                className={styles.input}
-                                placeholder="seu@email.com"
-                                required
-                            />
-                        </div>
+                            {pixInfo?.qrCodeBase64 ? (
+                                <div className={styles.qrCodeWrapper}>
+                                    <img
+                                        src={`data:image/png;base64,${pixInfo.qrCodeBase64}`}
+                                        alt="QR Code PIX"
+                                        className={styles.qrCodeImage}
+                                    />
+                                </div>
+                            ) : (
+                                <div className={styles.qrCodeWrapper}>
+                                    <div className={styles.qrCodePlaceholder}>Gerando QR Code...</div>
+                                </div>
+                            )}
 
-                        <div className={styles.formGroup}>
-                            <label htmlFor="phone" className={styles.label}>
-                                Telefone
-                            </label>
-                            <input
-                                type="tel"
-                                id="phone"
-                                value={customerData.phone}
-                                onChange={handlePhoneChange}
-                                className={styles.input}
-                                placeholder="(00) 00000-0000"
-                                maxLength={15}
-                            />
-                        </div>
-
-                        <div className={styles.paymentSection}>
-                            <h3 className={styles.paymentTitle}>Método de Pagamento</h3>
-                            
-                            <div className={styles.paymentMethods}>
-                                <button
-                                    type="button"
-                                    className={`${styles.paymentMethod} ${paymentMethod === 'pix' ? styles.selected : ''}`}
-                                    onClick={() => setPaymentMethod('pix')}
-                                >
-                                    <div className={styles.paymentIcon}>💳</div>
-                                    <div>
-                                        <div className={styles.paymentName}>PIX</div>
-                                        <div className={styles.paymentDesc}>Aprovação imediata</div>
-                                    </div>
-                                </button>
-
-                                <button
-                                    type="button"
-                                    className={`${styles.paymentMethod} ${paymentMethod === 'card' ? styles.selected : ''}`}
-                                    onClick={() => setPaymentMethod('card')}
-                                >
-                                    <div className={styles.paymentIcon}>💳</div>
-                                    <div>
-                                        <div className={styles.paymentName}>Cartão de Crédito</div>
-                                        <div className={styles.paymentDesc}>Parcelamento disponível</div>
-                                    </div>
-                                </button>
-
-                                <button
-                                    type="button"
-                                    className={`${styles.paymentMethod} ${paymentMethod === 'boleto' ? styles.selected : ''}`}
-                                    onClick={() => setPaymentMethod('boleto')}
-                                >
-                                    <div className={styles.paymentIcon}>📄</div>
-                                    <div>
-                                        <div className={styles.paymentName}>Boleto</div>
-                                        <div className={styles.paymentDesc}>Vencimento em 3 dias</div>
-                                    </div>
-                                </button>
+                            <div className={styles.pixTotal}>
+                                <span>Valor a pagar</span>
+                                <strong>{formatPrice(finalTotal)}</strong>
                             </div>
-                        </div>
 
-                        {error && (
-                            <div className={styles.errorAlert}>
-                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                    <circle cx="12" cy="12" r="10"/>
-                                    <line x1="12" y1="8" x2="12" y2="12"/>
-                                    <line x1="12" y1="16" x2="12.01" y2="16"/>
-                                </svg>
-                                {error}
+                            {pixInfo?.qrCode && (
+                                <div className={styles.pixCopyArea}>
+                                    <input type="text" readOnly value={pixInfo.qrCode} className={styles.pixCodeInput} />
+                                    <button
+                                        className={styles.pixCopyBtn}
+                                        onClick={() => {
+                                            navigator.clipboard.writeText(pixInfo.qrCode);
+                                            setPixCopied(true);
+                                            setTimeout(() => setPixCopied(false), 2000);
+                                        }}
+                                    >
+                                        {pixCopied ? 'Copiado!' : 'Copiar'}
+                                    </button>
+                                </div>
+                            )}
+
+                            <div className={styles.pixStatus}>
+                                <div className={styles.pixPulse}></div>
+                                <span>Aguardando confirmação do pagamento...</span>
                             </div>
-                        )}
 
-                        <button
-                            className={styles.checkoutButton}
-                            onClick={() => handlePayment(paymentMethod)}
-                            disabled={!paymentMethod || processing || !customerData.name || !customerData.email}
-                        >
-                            {processing ? 'Processando...' : `Finalizar Compra - ${formatPrice(total)}`}
-                        </button>
+                            <div className={styles.pixInstructions}>
+                                <p>1. Abra o app do seu banco</p>
+                                <p>2. Escolha pagar via PIX</p>
+                                <p>3. Escaneie o QR Code ou cole o código</p>
+                                <p>4. Confirme e aguarde a aprovação</p>
+                            </div>
 
-                        <p className={styles.disclaimer}>
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
-                                <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-                            </svg>
-                            Seus dados estão seguros e protegidos
-                        </p>
+                            <button
+                                className={styles.backLinkBtn}
+                                onClick={() => {
+                                    if (pixPollingRef.current) clearInterval(pixPollingRef.current);
+                                    setCheckoutStep('details');
+                                    setPixInfo(null);
+                                }}
+                            >
+                                Voltar e escolher outro método
+                            </button>
+                        </div>
                     </div>
-                </div>
+                )}
+
+                {/* ─── STEP: CARD ─── */}
+                {checkoutStep === 'card' && (
+                    <div className={styles.content}>
+                        {/* Left — Order Summary (compact) */}
+                        <div className={styles.summarySection}>
+                            <h2 className={styles.sectionTitle}>Resumo</h2>
+                            {event && <div className={styles.eventCard}><h3 className={styles.eventName}>{event.name}</h3></div>}
+                            <div className={styles.totalSection} style={{ paddingTop: '1rem', borderTop: '2px solid #e2e8f0' }}>
+                                <div className={styles.totalRow}>
+                                    <span className={styles.totalLabel}>Total</span>
+                                    <span className={styles.totalPrice}>{formatPrice(finalTotal)}</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Right — Card Form */}
+                        <div className={styles.formSection}>
+                            <h2 className={styles.sectionTitle}>Dados do Cartão</h2>
+
+                            <form id="form-checkout" className={styles.cardForm}>
+                                <div className={styles.formGroup}>
+                                    <label className={styles.label}>Número do cartão</label>
+                                    <div id="form-checkout__cardNumber" className={styles.mpField}></div>
+                                </div>
+
+                                <div className={styles.formRow2}>
+                                    <div className={styles.formGroup}>
+                                        <label className={styles.label}>Validade</label>
+                                        <div id="form-checkout__expirationDate" className={styles.mpField}></div>
+                                    </div>
+                                    <div className={styles.formGroup}>
+                                        <label className={styles.label}>CVV</label>
+                                        <div id="form-checkout__securityCode" className={styles.mpField}></div>
+                                    </div>
+                                </div>
+
+                                <div className={styles.formGroup}>
+                                    <label className={styles.label}>Nome no cartão</label>
+                                    <input type="text" id="form-checkout__cardholderName" className={styles.input} placeholder="Como está no cartão" defaultValue={customerData.name} />
+                                </div>
+
+                                <div className={styles.formGroup} style={{ display: 'none' }}>
+                                    <select id="form-checkout__identificationType"></select>
+                                </div>
+
+                                <div className={styles.formGroup} style={{ display: 'none' }}>
+                                    <select id="form-checkout__issuer"></select>
+                                </div>
+
+                                <div className={styles.formRow2}>
+                                    <div className={styles.formGroup}>
+                                        <label className={styles.label}>CPF do titular</label>
+                                        <input type="text" id="form-checkout__identificationNumber" className={styles.input} placeholder="000.000.000-00" defaultValue={cpf} />
+                                    </div>
+                                    <div className={styles.formGroup}>
+                                        <label className={styles.label}>Parcelas</label>
+                                        <select id="form-checkout__installments" className={styles.input}></select>
+                                    </div>
+                                </div>
+
+                                <div className={styles.formGroup} style={{ display: 'none' }}>
+                                    <input type="email" id="form-checkout__cardholderEmail" defaultValue={customerData.email} />
+                                </div>
+
+                                {error && (
+                                    <div className={styles.errorAlert}>
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                                        {error}
+                                    </div>
+                                )}
+
+                                <button type="submit" className={styles.checkoutButton} disabled={processing}>
+                                    {processing ? 'Processando...' : `Pagar ${formatPrice(finalTotal)}`}
+                                </button>
+                            </form>
+
+                            <button
+                                className={styles.backLinkBtn}
+                                onClick={() => { cardFormRef.current = null; setCheckoutStep('details'); setError(null); }}
+                            >
+                                Voltar
+                            </button>
+
+                            <p className={styles.disclaimer}>
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                                Pagamento seguro via Mercado Pago
+                            </p>
+                        </div>
+                    </div>
+                )}
             </div>
 
             <Footer />
@@ -800,17 +960,13 @@ function CheckoutPageContent() {
 export default function CheckoutPage() {
     return (
         <Suspense fallback={
-            <main className={styles.main}>
-                <Header />
-                <div className={styles.loadingContainer}>
-                    <div className={styles.spinner}></div>
-                    <p>Carregando checkout...</p>
+            <main style={{ minHeight: '100vh' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '60vh' }}>
+                    <p>Carregando...</p>
                 </div>
-                <Footer />
             </main>
         }>
             <CheckoutPageContent />
         </Suspense>
     );
 }
-

@@ -84,7 +84,7 @@ export default function CreateOrganizationModal({ onSuccess }: CreateOrganizatio
                             URL Personalizada
                         </label>
                         <div className={styles.slugInput}>
-                            <span className={styles.slugPrefix}>divinetickets.com/</span>
+                            <span className={styles.slugPrefix}>missaoguadalupe.com/</span>
                             <input
                                 id="slug"
                                 type="text"

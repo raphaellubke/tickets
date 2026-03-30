@@ -14,7 +14,6 @@ interface Ticket {
     event_id: string;
     ticket_type_id: string;
     status: string;
-    price: number;
     created_at: string;
     events: {
         name: string;
@@ -82,11 +81,11 @@ export default function ProfilePage() {
         try {
             setTicketsLoading(true);
             
-            // Buscar pedidos do usuário
+            // Buscar pedidos do usuário (incluindo compras como guest pelo email)
             const { data: ordersData, error: ordersError } = await supabase
                 .from('orders')
                 .select('id')
-                .eq('user_id', user.id);
+                .or(`user_id.eq.${user.id},customer_email.eq.${user.email}`);
 
             if (ordersError) {
                 console.error('Error fetching orders:', ordersError);
@@ -241,13 +240,6 @@ export default function ProfilePage() {
         });
     };
 
-    const formatPrice = (price: number) => {
-        return new Intl.NumberFormat('pt-BR', {
-            style: 'currency',
-            currency: 'BRL',
-        }).format(price);
-    };
-
     if (authLoading || loading) {
         return (
             <div className={styles.container}>
@@ -374,10 +366,6 @@ export default function ProfilePage() {
                                                     <span className={styles.detailValue}>{ticket.events.location}</span>
                                                 </div>
                                             )}
-                                            <div className={styles.ticketDetail}>
-                                                <span className={styles.detailLabel}>Valor:</span>
-                                                <span className={styles.detailValue}>{formatPrice(ticket.price)}</span>
-                                            </div>
                                         </div>
 
                                         <div className={styles.ticketFooter}>

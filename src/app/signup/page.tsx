@@ -4,24 +4,20 @@ import { useState, useEffect, Suspense } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import styles from '../login/page.module.css'; // Reusing login styles for consistency
+import styles from '../login/page.module.css';
 
 function SignUpPageContent() {
     const [fullName, setFullName] = useState('');
     const [email, setEmail] = useState('');
-    const [password, setPassword] = useState('');
     const [loading, setLoading] = useState(false);
+    const [sent, setSent] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const router = useRouter();
     const searchParams = useSearchParams();
     const supabase = createClient();
 
-    // Pre-fill email from invite link
     useEffect(() => {
         const inviteEmail = searchParams.get('email');
-        if (inviteEmail) {
-            setEmail(decodeURIComponent(inviteEmail));
-        }
+        if (inviteEmail) setEmail(decodeURIComponent(inviteEmail));
     }, [searchParams]);
 
     const handleSignUp = async (e: React.FormEvent) => {
@@ -29,46 +25,54 @@ function SignUpPageContent() {
         setLoading(true);
         setError(null);
 
-        try {
-            const { data, error } = await supabase.auth.signUp({
-                email,
-                password,
-                options: {
-                    data: {
-                        full_name: fullName,
-                        avatar_url: `https://ui-avatars.com/api/?name=${encodeURIComponent(fullName)}&background=random`,
-                    },
-                },
-            });
+        const redirectTo = `${window.location.origin}/auth/callback?next=${searchParams.get('redirect') || '/dashboard'}`;
 
-            if (error) {
-                setError(error.message);
-            } else if (data.user) {
-                // Check if email confirmation is required
-                if (data.user.identities?.length === 0) {
-                    setError('Esta conta já existe. Tente fazer login.');
-                } else {
-                    // Check if there's a pending invite
-                    const pendingInvite = sessionStorage.getItem('pendingInvite');
-                    const redirectUrl = searchParams.get('redirect');
-                    
-                    if (redirectUrl) {
-                        router.push(redirectUrl);
-                    } else if (pendingInvite) {
-                        const inviteData = JSON.parse(pendingInvite);
-                        router.push(`/invite/${inviteData.token}?org=${inviteData.orgId}&role=${inviteData.role}${inviteData.email ? `&email=${encodeURIComponent(inviteData.email)}` : ''}`);
-                    } else {
-                        router.push('/dashboard');
-                    }
-                    router.refresh();
-                }
-            }
-        } catch (err) {
-            setError('Ocorreu um erro ao tentar criar a conta.');
-        } finally {
-            setLoading(false);
+        const { error } = await supabase.auth.signInWithOtp({
+            email,
+            options: {
+                emailRedirectTo: redirectTo,
+                data: {
+                    full_name: fullName,
+                    avatar_url: `https://ui-avatars.com/api/?name=${encodeURIComponent(fullName)}&background=random`,
+                },
+            },
+        });
+
+        setLoading(false);
+
+        if (error) {
+            setError(error.message);
+        } else {
+            setSent(true);
         }
     };
+
+    if (sent) {
+        return (
+            <div className={styles.container}>
+                <div className={styles.card}>
+                    <div className={styles.header}>
+                        <div className={styles.logo}>✉️</div>
+                        <h1 className={styles.title}>Verifique seu e-mail</h1>
+                        <p className={styles.subtitle}>
+                            Enviamos um link de acesso para<br />
+                            <strong>{email}</strong>
+                        </p>
+                    </div>
+                    <p style={{ textAlign: 'center', fontSize: 14, color: '#6b7280', marginTop: 16 }}>
+                        Clique no link do e-mail para criar sua conta e entrar. Não precisa de senha.
+                    </p>
+                    <button
+                        onClick={() => setSent(false)}
+                        className={styles.submitBtn}
+                        style={{ marginTop: 24, background: '#6b7280' }}
+                    >
+                        Usar outro e-mail
+                    </button>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className={styles.container}>
@@ -76,7 +80,7 @@ function SignUpPageContent() {
                 <div className={styles.header}>
                     <div className={styles.logo}>D</div>
                     <h1 className={styles.title}>Crie sua conta</h1>
-                    <p className={styles.subtitle}>Comece a gerenciar seus eventos hoje</p>
+                    <p className={styles.subtitle}>Simples e sem senha — só seu e-mail</p>
                 </div>
 
                 <form onSubmit={handleSignUp} className={styles.form}>
@@ -96,7 +100,7 @@ function SignUpPageContent() {
                     </div>
 
                     <div className={styles.formGroup}>
-                        <label htmlFor="email" className={styles.label}>Email</label>
+                        <label htmlFor="email" className={styles.label}>E-mail</label>
                         <input
                             id="email"
                             type="email"
@@ -108,23 +112,13 @@ function SignUpPageContent() {
                         />
                     </div>
 
-                    <div className={styles.formGroup}>
-                        <label htmlFor="password" className={styles.label}>Senha</label>
-                        <input
-                            id="password"
-                            type="password"
-                            value={password}
-                            onChange={(e) => setPassword(e.target.value)}
-                            className={styles.input}
-                            placeholder="••••••••"
-                            minLength={6}
-                            required
-                        />
-                    </div>
-
                     <button type="submit" className={styles.submitBtn} disabled={loading}>
-                        {loading ? 'Criando conta...' : 'Criar conta'}
+                        {loading ? 'Enviando...' : 'Criar conta'}
                     </button>
+
+                    <p style={{ textAlign: 'center', fontSize: 12, color: '#9ca3af' }}>
+                        Enviaremos um link por e-mail. Sem senha necessária.
+                    </p>
                 </form>
 
                 <div className={styles.footer}>
@@ -148,6 +142,3 @@ export default function SignUpPage() {
         </Suspense>
     );
 }
-
-
-

@@ -57,15 +57,22 @@ export async function POST(request: NextRequest) {
 
 async function processApprovedPayment(orderId: string, supabase: any) {
     try {
-        // 1. Update order status
-        await supabase
+        // 1. Update order status — only if still pending (idempotency guard)
+        const { data: updatedOrders } = await supabase
             .from('orders')
             .update({
                 payment_status: 'paid',
                 paid_at: new Date().toISOString(),
                 updated_at: new Date().toISOString()
             })
-            .eq('id', orderId);
+            .eq('id', orderId)
+            .eq('payment_status', 'pending')
+            .select('id');
+
+        if (!updatedOrders || updatedOrders.length === 0) {
+            console.log('Order already processed, skipping ticket generation:', orderId);
+            return;
+        }
 
         // 2. Get order items
         const { data: orderItems } = await supabase
@@ -104,7 +111,6 @@ async function processApprovedPayment(orderId: string, supabase: any) {
                         event_id: order.event_id,
                         ticket_type_id: item.ticket_type_id,
                         ticket_code: ticketCode,
-                        price: item.unit_price,
                         status: 'active',
                         organization_id: order.organization_id
                     })
@@ -124,7 +130,7 @@ async function processApprovedPayment(orderId: string, supabase: any) {
                         .from('events')
                         .select('form_id, require_form')
                         .eq('id', order.event_id)
-                        .single();
+                        .maybeSingle();
 
                     if (eventData?.form_id) {
                         // Create form_response
@@ -163,22 +169,10 @@ async function processApprovedPayment(orderId: string, supabase: any) {
                     }
                 }
 
-                // 6. Update ticket type stock (increment quantity_sold)
-                // Get current quantity_sold
-                const { data: ticketType } = await supabase
-                    .from('event_ticket_types')
-                    .select('quantity_sold')
-                    .eq('id', item.ticket_type_id)
-                    .single();
-
-                if (ticketType) {
-                    await supabase
-                        .from('event_ticket_types')
-                        .update({
-                            quantity_sold: (ticketType.quantity_sold || 0) + 1
-                        })
-                        .eq('id', item.ticket_type_id);
-                }
+                // 6. Update ticket type stock (atomic increment — avoids race condition)
+                await supabase.rpc('increment_quantity_sold', {
+                    p_ticket_type_id: item.ticket_type_id
+                });
             }
         }
 

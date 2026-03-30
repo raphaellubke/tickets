@@ -501,3 +501,333 @@
     }
 }
 
+
+
+/* Coupon Styles */
+.couponSection {
+    padding: 1rem 0;
+    border-top: 1px solid #e2e8f0;
+}
+
+.couponRow {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.couponInput {
+    flex: 1;
+    padding: 0.625rem 0.875rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    font-size: 0.875rem;
+    color: #111827;
+    background: #fff;
+    font-family: monospace;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    transition: border-color 0.15s;
+}
+
+.couponInput:focus {
+    outline: none;
+    border-color: #4A90E2;
+    box-shadow: 0 0 0 3px rgba(74, 144, 226, 0.1);
+}
+
+.couponInput:disabled {
+    background: #f9fafb;
+    color: #6b7280;
+}
+
+.couponApplyBtn {
+    padding: 0.625rem 1rem;
+    background: #111827;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    font-size: 0.875rem;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.2s;
+}
+
+.couponApplyBtn:hover:not(:disabled) {
+    background: #1f2937;
+}
+
+.couponApplyBtn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.couponRemoveBtn {
+    padding: 0.625rem 1rem;
+    background: #fff;
+    color: #dc2626;
+    border: 1px solid #fecaca;
+    border-radius: 8px;
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.2s;
+}
+
+.couponRemoveBtn:hover {
+    background: #fef2f2;
+}
+
+.couponError {
+    font-size: 0.8125rem;
+    color: #dc2626;
+    margin: 0.375rem 0 0 0;
+}
+
+.couponApplied {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    background: #f0fdf4;
+    border: 1px solid #bbf7d0;
+    border-radius: 8px;
+    font-size: 0.8125rem;
+    color: #166534;
+}
+
+.couponDiscount {
+    margin-left: auto;
+    font-weight: 700;
+    color: #16a34a;
+}
+
+/* ─── Form Row 2 col ─── */
+.formRow2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+}
+
+/* ─── Payment icon ─── */
+.paymentIconWrap {
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: white;
+    border-radius: 8px;
+    flex-shrink: 0;
+    color: #374151;
+}
+
+/* ─── PIX step ─── */
+.pixWrapper {
+    display: flex;
+    justify-content: center;
+    padding: 2rem 1rem 4rem;
+}
+
+.pixCard {
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 16px;
+    padding: 2.5rem 2rem;
+    max-width: 480px;
+    width: 100%;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1.25rem;
+}
+
+.pixTitle {
+    font-size: 1.375rem;
+    font-weight: 700;
+    color: #0f172a;
+    margin: 0;
+    text-align: center;
+}
+
+.pixSubtitle {
+    font-size: 0.9rem;
+    color: #64748b;
+    margin: 0;
+    text-align: center;
+}
+
+.qrCodeWrapper {
+    padding: 1rem;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+}
+
+.qrCodeImage {
+    display: block;
+    width: 220px;
+    height: 220px;
+    object-fit: contain;
+}
+
+.qrCodePlaceholder {
+    width: 220px;
+    height: 220px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.875rem;
+    color: #94a3b8;
+}
+
+.pixTotal {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    padding: 0.875rem 1rem;
+    background: #f8fafc;
+    border-radius: 10px;
+    font-size: 0.9rem;
+    color: #64748b;
+}
+
+.pixTotal strong {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: #0f172a;
+}
+
+.pixCopyArea {
+    display: flex;
+    width: 100%;
+    gap: 0;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+.pixCodeInput {
+    flex: 1;
+    padding: 0.75rem 1rem;
+    font-size: 0.75rem;
+    color: #64748b;
+    background: #f8fafc;
+    border: none;
+    outline: none;
+    font-family: monospace;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.pixCopyBtn {
+    padding: 0.75rem 1.25rem;
+    background: #0f172a;
+    color: white;
+    border: none;
+    font-size: 0.875rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s;
+    white-space: nowrap;
+    font-family: inherit;
+}
+
+.pixCopyBtn:hover {
+    background: #1e293b;
+}
+
+.pixStatus {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    font-size: 0.875rem;
+    color: #64748b;
+}
+
+.pixPulse {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #22c55e;
+    flex-shrink: 0;
+    animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.5; transform: scale(0.85); }
+}
+
+.pixInstructions {
+    width: 100%;
+    padding: 1rem;
+    background: #f8fafc;
+    border-radius: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.pixInstructions p {
+    font-size: 0.8125rem;
+    color: #64748b;
+    margin: 0;
+}
+
+/* ─── Card form ─── */
+.cardForm {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+}
+
+.mpField {
+    height: 44px;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    background: white;
+    transition: border-color 0.2s;
+    overflow: hidden;
+}
+
+/* ─── Back link button ─── */
+.backLinkBtn {
+    background: none;
+    border: none;
+    color: #64748b;
+    font-size: 0.875rem;
+    cursor: pointer;
+    padding: 0.25rem 0;
+    font-family: inherit;
+    text-align: center;
+    width: 100%;
+    margin-top: 0.5rem;
+    transition: color 0.15s;
+}
+
+.backLinkBtn:hover {
+    color: #0f172a;
+}
+
+@media (max-width: 640px) {
+    .formRow2 {
+        grid-template-columns: 1fr;
+        gap: 0;
+    }
+
+    .pixCard {
+        padding: 1.5rem 1rem;
+    }
+
+    .qrCodeImage,
+    .qrCodePlaceholder {
+        width: 180px;
+        height: 180px;
+    }
+}

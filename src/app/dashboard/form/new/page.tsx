@@ -19,6 +19,7 @@ interface FormData {
     name: string;
     description: string;
     status: string;
+    isCouple: boolean;
 }
 
 export default function NewFormPage() {
@@ -33,7 +34,8 @@ export default function NewFormPage() {
     const [formData, setFormData] = useState<FormData>({
         name: '',
         description: '',
-        status: 'rascunho'
+        status: 'draft',
+        isCouple: false,
     });
 
     const [fields, setFields] = useState<FormField[]>([]);
@@ -54,11 +56,12 @@ export default function NewFormPage() {
         setLoadingData(true);
         try {
             // Get user's organization
-            const { data: memberData } = await supabase
+            const { data: members0 } = await supabase
                 .from('organization_members')
                 .select('organization_id')
                 .eq('user_id', user.id)
-                .single();
+                .limit(1);
+            const memberData = members0?.[0];
 
             if (!memberData) {
                 setError('Organização não encontrada');
@@ -84,7 +87,8 @@ export default function NewFormPage() {
             setFormData({
                 name: form.title || form.name || '',
                 description: form.description || '',
-                status: form.status || 'rascunho'
+                status: form.status || 'draft',
+                isCouple: form.is_couple || false,
             });
 
             // Load form fields
@@ -207,13 +211,14 @@ export default function NewFormPage() {
 
         try {
             // Get user's organization
-            const { data: memberData, error: memberError } = await supabase
+            const { data: members1 } = await supabase
                 .from('organization_members')
                 .select('organization_id')
                 .eq('user_id', user.id)
-                .single();
+                .limit(1);
+            const memberData = members1?.[0];
 
-            if (memberError || !memberData) {
+            if (!memberData) {
                 throw new Error('Organização não encontrada');
             }
 
@@ -221,11 +226,12 @@ export default function NewFormPage() {
             const formDataToSave: any = {
                 name: formData.name,
                 description: formData.description || null,
-                status: formData.status || 'rascunho',
+                status: formData.status || 'draft',
                 organization_id: memberData.organization_id,
                 user_id: user.id,
                 created_by: user.id,
-                is_active: formData.status === 'ativo'
+                is_active: formData.status === 'active',
+                is_couple: formData.isCouple || false,
             };
 
             let currentFormId = formId;
@@ -424,9 +430,23 @@ export default function NewFormPage() {
                             onChange={handleInputChange}
                             className={styles.select}
                         >
-                            <option value="rascunho">Rascunho</option>
-                            <option value="ativo">Ativo</option>
+                            <option value="draft">Rascunho</option>
+                            <option value="active">Ativo</option>
                         </select>
+                    </div>
+
+                    <div className={styles.formGroup}>
+                        <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+                            <input
+                                type="checkbox"
+                                checked={formData.isCouple}
+                                onChange={(e) => setFormData(prev => ({ ...prev, isCouple: e.target.checked }))}
+                                style={{ width: '16px', height: '16px', cursor: 'pointer' }}
+                            />
+                            <span style={{ fontSize: '0.875rem', color: '#374151' }}>
+                                Formulário de casal (campos Ele / Ela)
+                            </span>
+                        </label>
                     </div>
                 </div>
 

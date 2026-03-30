@@ -15,18 +15,10 @@ export default function Header() {
             <header className={styles.header}>
                 <div className={styles.container}>
                     <Link href="/" className={styles.logo}>
-                        <span className={styles.logoIcon}>⛪</span>
-                        <span className={styles.logoText}>DivineTickets</span>
+                        <span className={styles.logoIcon}>✝️</span>
+                        <span className={styles.logoText}>Missão Guadalupe</span>
                     </Link>
 
-                    <div className={styles.locationSelector}>
-                        <span className={styles.locationIcon}>📍</span>
-                        <select className={styles.locationSelect}>
-                            <option>Todos os estados</option>
-                            <option>São Paulo</option>
-                            <option>Rio de Janeiro</option>
-                        </select>
-                    </div>
 
                     <div className={styles.searchContainer}>
                         <input

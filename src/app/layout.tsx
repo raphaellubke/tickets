@@ -6,7 +6,7 @@ import { Providers } from "./providers";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "DivineTickets",
+  title: "Missão Guadalupe",
   description: "Plataforma de eventos para igrejas",
 };
 
@@ -16,7 +16,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="pt-BR">
+    <html lang="pt-BR" data-scroll-behavior="smooth">
       <body className={inter.className}>
         <Providers>
           {children}

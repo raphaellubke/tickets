@@ -11,14 +11,18 @@ import styles from './page.module.css';
 interface Event {
     id: string;
     name: string;
-    title?: string; // Alias para name para compatibilidade
+    title?: string;
     description: string | null;
     event_date: string;
     location: string | null;
     status: string;
     image_url: string | null;
-    cover_image_url?: string | null; // Alias para image_url
+    cover_image_url?: string | null;
     created_at: string;
+    ticketsSold?: number;
+    capacity?: number;
+    revenue?: number;
+    views?: number;
 }
 
 export default function EventsPage() {
@@ -55,6 +59,13 @@ export default function EventsPage() {
             const eventToDuplicate = events.find(e => e.id === eventId);
             if (!eventToDuplicate) return;
 
+            const { data: members } = await supabase
+                .from('organization_members')
+                .select('organization_id')
+                .eq('user_id', user?.id)
+                .limit(1);
+            const orgId = members?.[0]?.organization_id;
+
             const { data: newEvent, error } = await supabase
                 .from('events')
                 .insert({
@@ -62,12 +73,8 @@ export default function EventsPage() {
                     description: eventToDuplicate.description,
                     event_date: eventToDuplicate.event_date,
                     location: eventToDuplicate.location,
-                    status: 'rascunho',
-                    organization_id: (await supabase
-                        .from('organization_members')
-                        .select('organization_id')
-                        .eq('user_id', user?.id)
-                        .single()).data?.organization_id,
+                    status: 'draft',
+                    organization_id: orgId,
                 })
                 .select()
                 .single();
@@ -87,11 +94,12 @@ export default function EventsPage() {
 
             try {
                 // Get user's organization
-                const { data: memberData } = await supabase
+                const { data: membersData } = await supabase
                     .from('organization_members')
                     .select('organization_id')
                     .eq('user_id', user.id)
-                    .single();
+                    .limit(1);
+                const memberData = membersData?.[0];
 
                 if (!memberData) {
                     setLoading(false);
@@ -106,8 +114,44 @@ export default function EventsPage() {
                     .order('event_date', { ascending: false });
 
                 if (error) throw error;
+                if (!eventsData || eventsData.length === 0) {
+                    setEvents([]);
+                    return;
+                }
 
-                setEvents(eventsData || []);
+                const eventIds = eventsData.map(e => e.id);
+
+                // Fetch tickets sold per event
+                const { data: ticketsData } = await supabase
+                    .from('tickets')
+                    .select('event_id')
+                    .in('event_id', eventIds)
+                    .in('status', ['active', 'used']);
+
+                // Fetch revenue per event from paid orders
+                const { data: ordersData } = await supabase
+                    .from('orders')
+                    .select('event_id, total_amount')
+                    .in('event_id', eventIds)
+                    .eq('payment_status', 'paid');
+
+                // Fetch total capacity per event
+                const { data: typesData } = await supabase
+                    .from('event_ticket_types')
+                    .select('event_id, quantity_available')
+                    .in('event_id', eventIds);
+
+                // Aggregate per event
+                const enrichedEvents = eventsData.map(event => {
+                    const sold = ticketsData?.filter(t => t.event_id === event.id).length ?? 0;
+                    const cap = typesData?.filter(t => t.event_id === event.id)
+                        .reduce((sum, t) => sum + (t.quantity_available || 0), 0) ?? 0;
+                    const rev = ordersData?.filter(o => o.event_id === event.id)
+                        .reduce((sum, o) => sum + parseFloat(o.total_amount || '0'), 0) ?? 0;
+                    return { ...event, ticketsSold: sold, capacity: cap, revenue: rev };
+                });
+
+                setEvents(enrichedEvents);
             } catch (error) {
                 console.error('Error fetching events:', error);
             } finally {
@@ -120,12 +164,10 @@ export default function EventsPage() {
 
     const getStatusLabel = (status: string) => {
         const statusMap: Record<string, string> = {
-            publicado: 'Publicado',
-            rascunho: 'Rascunho',
-            finalizado: 'Encerrado',
-            cancelado: 'Cancelado',
-            arquivado: 'Arquivado',
-            ativo: 'Ativo',
+            published: 'Publicado',
+            draft: 'Rascunho',
+            ended: 'Encerrado',
+            cancelled: 'Cancelado',
         };
         return statusMap[status] || status;
     };
@@ -138,9 +180,9 @@ export default function EventsPage() {
     const filteredEvents = events
         .filter(event => {
             if (activeFilter === 'all') return true;
-            if (activeFilter === 'published') return event.status === 'publicado';
-            if (activeFilter === 'draft') return event.status === 'rascunho';
-            if (activeFilter === 'ended') return event.status === 'finalizado';
+            if (activeFilter === 'published') return event.status === 'published';
+            if (activeFilter === 'draft') return event.status === 'draft';
+            if (activeFilter === 'ended') return event.status === 'ended';
             return true;
         })
         .filter(event => {
@@ -217,9 +259,10 @@ export default function EventsPage() {
                 <table className={styles.table}>
                     <thead>
                         <tr>
-                            <th style={{ width: '40%' }}>Evento</th>
+                            <th style={{ width: '38%' }}>Evento</th>
                             <th>Status</th>
                             <th>Vendas</th>
+                            <th>Visualizações</th>
                             <th>Receita</th>
                             <th></th>
                         </tr>
@@ -247,33 +290,54 @@ export default function EventsPage() {
                                     </div>
                                 </td>
                                 <td>
-                                    <span className={`${styles.badge} ${event.status === 'publicado' ? styles.badgeSuccess :
-                                        event.status === 'rascunho' ? styles.badgeWarning :
+                                    <span className={`${styles.badge} ${event.status === 'published' ? styles.badgeSuccess :
+                                        event.status === 'draft' ? styles.badgeWarning :
                                             styles.badgeNeutral
                                         }`}>
                                         {getStatusLabel(event.status)}
                                     </span>
                                 </td>
                                 <td>
-                                    <div className={styles.salesInfo}>
-                                        <div className={styles.salesText}>
-                                            <span className={styles.salesCount}>0/100</span>
-                                            <span className={styles.salesPercent}>0%</span>
-                                        </div>
-                                        <div className={styles.progressBar}>
-                                            <div
-                                                className={styles.progressFill}
-                                                style={{ width: '0%' }}
-                                            />
-                                        </div>
-                                    </div>
+                                    {(() => {
+                                        const sold = event.ticketsSold ?? 0;
+                                        const cap = event.capacity ?? 0;
+                                        const pct = cap > 0 ? Math.min((sold / cap) * 100, 100) : 0;
+                                        return (
+                                            <div className={styles.salesInfo}>
+                                                <div className={styles.salesText}>
+                                                    <span className={styles.salesCount}>{sold}/{cap || '—'}</span>
+                                                    <span className={styles.salesPercent}>{pct.toFixed(0)}%</span>
+                                                </div>
+                                                <div className={styles.progressBar}>
+                                                    <div className={styles.progressFill} style={{ width: `${pct}%` }} />
+                                                </div>
+                                            </div>
+                                        );
+                                    })()}
                                 </td>
-                                <td className={styles.revenueCell}>R$ 0,00</td>
+                                <td style={{ color: '#6b7280', fontSize: 14 }}>
+                                    <span title="Visualizações da página do evento">
+                                        👁 {(event.views ?? 0).toLocaleString('pt-BR')}
+                                    </span>
+                                </td>
+                                <td className={styles.revenueCell}>
+                                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(event.revenue ?? 0)}
+                                </td>
                                 <td>
                                     <div className={styles.actions}>
-                                        <Link 
+                                        <Link
+                                            href={`/dashboard/events/${event.id}`}
+                                            className={styles.actionBtn}
+                                            title="Ver Detalhes"
+                                        >
+                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                                                <circle cx="12" cy="12" r="3"/>
+                                            </svg>
+                                        </Link>
+                                        <Link
                                             href={`/dashboard/events/new?id=${event.id}`}
-                                            className={styles.actionBtn} 
+                                            className={styles.actionBtn}
                                             title="Editar"
                                         >
                                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">

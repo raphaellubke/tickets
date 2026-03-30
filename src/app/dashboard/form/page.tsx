@@ -11,12 +11,14 @@ import styles from './page.module.css';
 
 interface Form {
     id: string;
-    title: string;
+    name: string;
     description: string | null;
-    fields: any;
     status: string;
     created_at: string;
-    updated_at: string;
+    updated_at?: string;
+    fieldCount?: number;
+    responseCount?: number;
+    completedCount?: number;
 }
 
 export default function FormsPage() {
@@ -58,17 +60,20 @@ export default function FormsPage() {
             const formToDuplicate = forms.find(f => f.id === formId);
             if (!formToDuplicate) return;
 
+            const { data: members } = await supabase
+                .from('organization_members')
+                .select('organization_id')
+                .eq('user_id', user?.id)
+                .limit(1);
+            const orgId = members?.[0]?.organization_id;
+
             const { data: newForm, error } = await supabase
                 .from('forms')
                 .insert({
-                    title: `${formToDuplicate.title} (Cópia)`,
+                    name: `${formToDuplicate.title || formToDuplicate.name} (Cópia)`,
                     description: formToDuplicate.description,
                     status: 'draft',
-                    organization_id: (await supabase
-                        .from('organization_members')
-                        .select('organization_id')
-                        .eq('user_id', user?.id)
-                        .single()).data?.organization_id,
+                    organization_id: orgId,
                 })
                 .select()
                 .single();
@@ -109,13 +114,13 @@ export default function FormsPage() {
 
             try {
                 // Get user's organization
-                const { data: memberData } = await supabase
+                const { data: members } = await supabase
                     .from('organization_members')
                     .select('organization_id')
                     .eq('user_id', user.id)
-                    .eq('status', 'active')
-                    .single();
+                    .limit(1);
 
+                const memberData = members?.[0];
                 if (!memberData) {
                     setLoading(false);
                     return;
@@ -130,15 +135,38 @@ export default function FormsPage() {
 
                 if (error) throw error;
 
-                setForms(formsData || []);
+                const formIds = (formsData || []).map(f => f.id);
 
-                // Calculate stats
-                const activeForms = formsData?.filter(f => f.status === 'active').length || 0;
-                setStats({
-                    totalResponses: 0, // TODO: Fetch from responses table
-                    activeForms,
-                    completionRate: 0, // TODO: Calculate from responses
+                // Fetch field counts and response counts in parallel
+                const [{ data: fieldsData }, { data: responsesData }] = await Promise.all([
+                    formIds.length > 0
+                        ? supabase.from('form_fields').select('form_id').in('form_id', formIds)
+                        : Promise.resolve({ data: [] }),
+                    formIds.length > 0
+                        ? supabase.from('form_responses').select('form_id, status').in('form_id', formIds)
+                        : Promise.resolve({ data: [] }),
+                ]);
+
+                // Enrich forms with field count and response counts
+                const enriched = (formsData || []).map(f => {
+                    const formResponses = (responsesData || []).filter(r => r.form_id === f.id);
+                    return {
+                        ...f,
+                        fieldCount: (fieldsData || []).filter(fd => fd.form_id === f.id).length,
+                        responseCount: formResponses.length,
+                        completedCount: formResponses.filter(r => r.status === 'completed').length,
+                    };
                 });
+
+                setForms(enriched);
+
+                const totalResponses = responsesData?.length ?? 0;
+                const completedResponses = (responsesData || []).filter(r => r.status === 'completed').length;
+                const activeForms = enriched.filter(f => f.status === 'active').length;
+                const completionRate = totalResponses > 0
+                    ? Math.round((completedResponses / totalResponses) * 100)
+                    : 0;
+                setStats({ totalResponses, activeForms, completionRate });
             } catch (error) {
                 console.error('Error fetching forms:', error);
             } finally {
@@ -170,13 +198,6 @@ export default function FormsPage() {
         if (diffDays < 7) return `Há ${diffDays} dia${diffDays > 1 ? 's' : ''}`;
         if (diffDays < 30) return `Há ${Math.floor(diffDays / 7)} semana${Math.floor(diffDays / 7) > 1 ? 's' : ''}`;
         return `Há ${Math.floor(diffDays / 30)} mês${Math.floor(diffDays / 30) > 1 ? 'es' : ''}`;
-    };
-
-    const getFieldCount = (fields: any) => {
-        if (!fields) return 0;
-        if (Array.isArray(fields)) return fields.length;
-        if (typeof fields === 'object') return Object.keys(fields).length;
-        return 0;
     };
 
     if (loading) {
@@ -246,7 +267,7 @@ export default function FormsPage() {
                                         ),
                                         onClick: () => {
                                             setPreviewFormId(form.id);
-                                            setPreviewFormTitle(form.title);
+                                            setPreviewFormTitle(form.name || '');
                                         },
                                     },
                                     {
@@ -267,7 +288,7 @@ export default function FormsPage() {
                                                 <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
                                             </svg>
                                         ),
-                                        onClick: () => handleDeleteForm(form.id, form.title),
+                                        onClick: () => handleDeleteForm(form.id, form.name || ''),
                                         danger: true,
                                     },
                                 ]}
@@ -279,22 +300,22 @@ export default function FormsPage() {
                         </div>
 
                         <div className={styles.cardContent}>
-                            <h3 className={styles.formTitle}>{form.title}</h3>
+                            <h3 className={styles.formTitle}>{form.name || '(sem título)'}</h3>
                             <div className={styles.formMeta}>
-                                <span>{getFieldCount(form.fields)} campos</span>
+                                <span>{form.fieldCount ?? 0} campos</span>
                                 <span>•</span>
-                                <span>Atualizado {getLastUpdated(form.updated_at)}</span>
+                                <span>Criado {getLastUpdated(form.updated_at || form.created_at)}</span>
                             </div>
                         </div>
 
                         <div className={styles.cardStats}>
                             <div className={styles.cardStat}>
-                                <span className={styles.statNumber}>0</span>
+                                <span className={styles.statNumber}>{form.responseCount ?? 0}</span>
                                 <span className={styles.statText}>Respostas</span>
                             </div>
                             <div className={styles.cardStat}>
-                                <span className={styles.statNumber}>0</span>
-                                <span className={styles.statText}>Visualizações</span>
+                                <span className={styles.statNumber}>{form.completedCount ?? 0}</span>
+                                <span className={styles.statText}>Concluídas</span>
                             </div>
                         </div>
 

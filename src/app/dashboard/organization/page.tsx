@@ -15,15 +15,19 @@ interface Organization {
     settings: any;
 }
 
+type Tab = 'perfil' | 'cobranca' | 'notificacoes';
+
 export default function OrganizationPage() {
     const { user } = useAuth();
     const [organization, setOrganization] = useState<Organization | null>(null);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
+    const [saveSuccess, setSaveSuccess] = useState(false);
     const [uploadingLogo, setUploadingLogo] = useState(false);
     const [logoFile, setLogoFile] = useState<File | null>(null);
     const [logoPreview, setLogoPreview] = useState<string | null>(null);
     const [logoError, setLogoError] = useState<string | null>(null);
+    const [activeTab, setActiveTab] = useState<Tab>('perfil');
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [formData, setFormData] = useState({
         name: '',
@@ -34,6 +38,20 @@ export default function OrganizationPage() {
         phone: '',
         website: '',
     });
+    const [billingData, setBillingData] = useState({
+        pix_key_type: 'email',
+        pix_key: '',
+        bank_name: '',
+        bank_agency: '',
+        bank_account: '',
+    });
+    const [notifData, setNotifData] = useState({
+        notify_new_sale: true,
+        notify_payment_confirmed: true,
+        notify_cancellation: false,
+        notify_waitlist: true,
+        notify_form_submitted: false,
+    });
     const supabase = createClient();
 
     useEffect(() => {
@@ -42,11 +60,12 @@ export default function OrganizationPage() {
 
             try {
                 // Get user's organization
-                const { data: memberData } = await supabase
+                const { data: members } = await supabase
                     .from('organization_members')
                     .select('organization_id')
                     .eq('user_id', user.id)
-                    .single();
+                    .limit(1);
+                const memberData = members?.[0];
 
                 if (!memberData) {
                     setLoading(false);
@@ -58,7 +77,7 @@ export default function OrganizationPage() {
                     .from('organizations')
                     .select('*')
                     .eq('id', memberData.organization_id)
-                    .single();
+                    .maybeSingle();
 
                 if (error) throw error;
 
@@ -73,6 +92,9 @@ export default function OrganizationPage() {
                     website: orgData.website || '',
                 });
                 setLogoPreview(orgData.logo_url || null);
+                const s = orgData.settings || {};
+                if (s.billing) setBillingData(prev => ({ ...prev, ...s.billing }));
+                if (s.notifications) setNotifData(prev => ({ ...prev, ...s.notifications }));
             } catch (error) {
                 console.error('Error fetching organization:', error);
             } finally {
@@ -196,13 +218,12 @@ export default function OrganizationPage() {
 
             if (error) throw error;
 
-            // Update local state
             setFormData(prev => ({ ...prev, logo_url: finalLogoUrl || '' }));
             setLogoPreview(finalLogoUrl);
             setLogoFile(null);
             setUploadingLogo(false);
-
-            alert('Alterações salvas com sucesso!');
+            setSaveSuccess(true);
+            setTimeout(() => setSaveSuccess(false), 3000);
         } catch (error: any) {
             console.error('Error saving organization:', error);
             alert('Erro ao salvar: ' + error.message);
@@ -239,189 +260,249 @@ export default function OrganizationPage() {
                     className={styles.primaryBtn}
                     onClick={handleSave}
                     disabled={saving}
+                    style={saveSuccess ? { background: '#16a34a' } : undefined}
                 >
-                    {saving ? 'Salvando...' : 'Salvar Alterações'}
+                    {saving ? 'Salvando...' : saveSuccess ? '✓ Salvo!' : 'Salvar Alterações'}
                 </button>
             </div>
 
             <div className={styles.tabs}>
-                <button className={`${styles.tab} ${styles.activeTab}`}>Perfil</button>
-                <button className={styles.tab}>Cobrança</button>
-                <button className={styles.tab}>Notificações</button>
-                <button className={styles.tab}>Integrações</button>
+                {(['perfil', 'cobranca', 'notificacoes'] as Tab[]).map((tab) => (
+                    <button
+                        key={tab}
+                        className={`${styles.tab} ${activeTab === tab ? styles.activeTab : ''}`}
+                        onClick={() => setActiveTab(tab)}
+                    >
+                        {{ perfil: 'Perfil', cobranca: 'Cobrança', notificacoes: 'Notificações' }[tab]}
+                    </button>
+                ))}
             </div>
 
-            <div className={styles.contentGrid}>
-                {/* Main Settings Column */}
-                <div className={styles.mainColumn}>
-                    <div className={styles.card}>
-                        <div className={styles.cardHeader}>
-                            <h2 className={styles.cardTitle}>Perfil da Organização</h2>
-                            <p className={styles.cardDescription}>Informações visíveis publicamente sobre sua organização.</p>
-                        </div>
-
-                        <div className={styles.formGroup}>
-                            <label className={styles.label}>Logo</label>
-                            <div className={styles.logoUpload}>
-                                <div className={styles.logoPreview}>
-                                    {logoPreview ? (
-                                        <img src={logoPreview} alt="Logo" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '12px' }} />
-                                    ) : (
-                                        <span>{formData.name[0]?.toUpperCase() || 'D'}</span>
-                                    )}
-                                </div>
-                                <div className={styles.uploadActions}>
-                                    <input
-                                        ref={fileInputRef}
-                                        type="file"
-                                        accept="image/jpeg,image/jpg,image/png,image/gif"
-                                        onChange={handleLogoSelect}
-                                        className={styles.fileInput}
-                                        style={{ display: 'none' }}
-                                    />
-                                    <button
-                                        type="button"
-                                        className={styles.secondaryBtn}
-                                        onClick={handleLogoChange}
-                                        disabled={uploadingLogo || saving}
-                                    >
-                                        {uploadingLogo ? 'Enviando...' : 'Alterar logo'}
-                                    </button>
-                                    {(logoPreview || formData.logo_url) && (
-                                        <button
-                                            type="button"
-                                            className={styles.textBtn}
-                                            onClick={handleLogoRemove}
-                                            disabled={uploadingLogo || saving}
-                                        >
-                                            Remover
+            {/* ── PERFIL ── */}
+            {activeTab === 'perfil' && (
+                <div className={styles.contentGrid}>
+                    <div className={styles.mainColumn}>
+                        <div className={styles.card}>
+                            <div className={styles.cardHeader}>
+                                <h2 className={styles.cardTitle}>Perfil da Organização</h2>
+                                <p className={styles.cardDescription}>Informações visíveis publicamente sobre sua organização.</p>
+                            </div>
+                            <div className={styles.formGroup}>
+                                <label className={styles.label}>Logo</label>
+                                <div className={styles.logoUpload}>
+                                    <div className={styles.logoPreview}>
+                                        {logoPreview ? (
+                                            <img src={logoPreview} alt="Logo" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '12px' }} />
+                                        ) : (
+                                            <span>{formData.name[0]?.toUpperCase() || 'O'}</span>
+                                        )}
+                                    </div>
+                                    <div className={styles.uploadActions}>
+                                        <input ref={fileInputRef} type="file" accept="image/jpeg,image/jpg,image/png,image/gif" onChange={handleLogoSelect} style={{ display: 'none' }} />
+                                        <button type="button" className={styles.secondaryBtn} onClick={handleLogoChange} disabled={uploadingLogo || saving}>
+                                            {uploadingLogo ? 'Enviando...' : 'Alterar logo'}
                                         </button>
-                                    )}
-                                    <p className={styles.uploadHint}>JPG, GIF ou PNG. Max 1MB.</p>
-                                    {logoError && <p className={styles.errorText}>{logoError}</p>}
+                                        {(logoPreview || formData.logo_url) && (
+                                            <button type="button" className={styles.textBtn} onClick={handleLogoRemove} disabled={uploadingLogo || saving}>Remover</button>
+                                        )}
+                                        <p className={styles.uploadHint}>JPG, GIF ou PNG. Max 1MB.</p>
+                                        {logoError && <p className={styles.errorText}>{logoError}</p>}
+                                    </div>
                                 </div>
                             </div>
-                        </div>
-
-                        <div className={styles.formRow}>
-                            <div className={styles.formGroup}>
-                                <label className={styles.label}>Nome da Organização</label>
-                                <input
-                                    type="text"
-                                    className={styles.input}
-                                    value={formData.name}
-                                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                                />
-                            </div>
-                            <div className={styles.formGroup}>
-                                <label className={styles.label}>Slug (URL)</label>
-                                <div className={styles.inputGroup}>
-                                    <span className={styles.inputPrefix}>eventos.com/</span>
-                                    <input
-                                        type="text"
-                                        className={styles.input}
-                                        value={formData.slug}
-                                        onChange={(e) => setFormData({ ...formData, slug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-') })}
-                                    />
+                            <div className={styles.formRow}>
+                                <div className={styles.formGroup}>
+                                    <label className={styles.label}>Nome da Organização</label>
+                                    <input type="text" className={styles.input} value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} />
+                                </div>
+                                <div className={styles.formGroup}>
+                                    <label className={styles.label}>Slug (URL)</label>
+                                    <div className={styles.inputGroup}>
+                                        <span className={styles.inputPrefix}>eventos.com/</span>
+                                        <input type="text" className={styles.input} value={formData.slug} onChange={(e) => setFormData({ ...formData, slug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-') })} />
+                                    </div>
                                 </div>
                             </div>
+                            <div className={styles.formGroup}>
+                                <label className={styles.label}>Descrição</label>
+                                <textarea className={styles.textarea} rows={4} value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} />
+                                <p className={styles.hint}>Breve descrição que aparecerá na sua página pública.</p>
+                            </div>
                         </div>
-
-                        <div className={styles.formGroup}>
-                            <label className={styles.label}>Descrição</label>
-                            <textarea
-                                className={styles.textarea}
-                                rows={4}
-                                value={formData.description}
-                                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                            />
-                            <p className={styles.hint}>Breve descrição que aparecerá na sua página pública.</p>
+                        <div className={styles.card}>
+                            <div className={styles.cardHeader}>
+                                <h2 className={styles.cardTitle}>Informações de Contato</h2>
+                                <p className={styles.cardDescription}>Como os participantes podem entrar em contato com você.</p>
+                            </div>
+                            <div className={styles.formRow}>
+                                <div className={styles.formGroup}>
+                                    <label className={styles.label}>Email de Suporte</label>
+                                    <input type="email" className={styles.input} value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })} placeholder="suporte@exemplo.com" />
+                                </div>
+                                <div className={styles.formGroup}>
+                                    <label className={styles.label}>Telefone / WhatsApp</label>
+                                    <input type="tel" className={styles.input} value={formData.phone} onChange={(e) => setFormData({ ...formData, phone: e.target.value })} placeholder="(11) 99999-9999" />
+                                </div>
+                            </div>
+                            <div className={styles.formGroup}>
+                                <label className={styles.label}>Website</label>
+                                <input type="url" className={styles.input} value={formData.website} onChange={(e) => setFormData({ ...formData, website: e.target.value })} placeholder="https://exemplo.com" />
+                            </div>
                         </div>
                     </div>
-
-                    <div className={styles.card}>
-                        <div className={styles.cardHeader}>
-                            <h2 className={styles.cardTitle}>Informações de Contato</h2>
-                            <p className={styles.cardDescription}>Como os participantes podem entrar em contato com você.</p>
-                        </div>
-
-                        <div className={styles.formRow}>
-                            <div className={styles.formGroup}>
-                                <label className={styles.label}>Email de Suporte</label>
-                                <input
-                                    type="email"
-                                    className={styles.input}
-                                    value={formData.email}
-                                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                                    placeholder="suporte@exemplo.com"
-                                />
-                            </div>
-                            <div className={styles.formGroup}>
-                                <label className={styles.label}>Telefone / WhatsApp</label>
-                                <input
-                                    type="tel"
-                                    className={styles.input}
-                                    value={formData.phone}
-                                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                                    placeholder="(11) 99999-9999"
-                                />
+                    <div className={styles.sideColumn}>
+                        <div className={styles.card}>
+                            <div className={styles.cardHeader}><h2 className={styles.cardTitle}>Visibilidade</h2></div>
+                            <div className={styles.toggleGroup}>
+                                <div className={styles.toggleRow}>
+                                    <div className={styles.toggleInfo}>
+                                        <span className={styles.toggleLabel}>Página Pública</span>
+                                        <span className={styles.toggleDesc}>Tornar a página da organização visível para todos</span>
+                                    </div>
+                                    <label className={styles.switch}><input type="checkbox" defaultChecked /><span className={styles.slider}></span></label>
+                                </div>
+                                <div className={styles.toggleRow}>
+                                    <div className={styles.toggleInfo}>
+                                        <span className={styles.toggleLabel}>Listar em Buscas</span>
+                                        <span className={styles.toggleDesc}>Permitir que motores de busca indexem sua página</span>
+                                    </div>
+                                    <label className={styles.switch}><input type="checkbox" defaultChecked /><span className={styles.slider}></span></label>
+                                </div>
                             </div>
                         </div>
-
-                        <div className={styles.formGroup}>
-                            <label className={styles.label}>Website</label>
-                            <input
-                                type="url"
-                                className={styles.input}
-                                value={formData.website}
-                                onChange={(e) => setFormData({ ...formData, website: e.target.value })}
-                                placeholder="https://exemplo.com"
-                            />
+                        <div className={styles.card}>
+                            <div className={styles.cardHeader}><h2 className={styles.cardTitle}>Zona de Perigo</h2></div>
+                            <div className={styles.dangerZone}>
+                                <p className={styles.dangerText}>Ações irreversíveis para sua organização.</p>
+                                <button className={styles.dangerBtn}>Deletar Organização</button>
+                            </div>
                         </div>
                     </div>
                 </div>
+            )}
 
-                {/* Sidebar Settings Column */}
-                <div className={styles.sideColumn}>
-                    <div className={styles.card}>
-                        <div className={styles.cardHeader}>
-                            <h2 className={styles.cardTitle}>Visibilidade</h2>
-                        </div>
-                        <div className={styles.toggleGroup}>
-                            <div className={styles.toggleRow}>
-                                <div className={styles.toggleInfo}>
-                                    <span className={styles.toggleLabel}>Página Pública</span>
-                                    <span className={styles.toggleDesc}>Tornar a página da organização visível para todos</span>
-                                </div>
-                                <label className={styles.switch}>
-                                    <input type="checkbox" defaultChecked />
-                                    <span className={styles.slider}></span>
-                                </label>
+            {/* ── COBRANÇA ── */}
+            {activeTab === 'cobranca' && (
+                <div className={styles.contentGrid}>
+                    <div className={styles.mainColumn}>
+                        <div className={styles.card}>
+                            <div className={styles.cardHeader}>
+                                <h2 className={styles.cardTitle}>Chave PIX</h2>
+                                <p className={styles.cardDescription}>Configure sua chave PIX para receber pagamentos.</p>
                             </div>
-                            <div className={styles.toggleRow}>
-                                <div className={styles.toggleInfo}>
-                                    <span className={styles.toggleLabel}>Listar em Buscas</span>
-                                    <span className={styles.toggleDesc}>Permitir que motores de busca indexem sua página</span>
+                            <div className={styles.formRow}>
+                                <div className={styles.formGroup}>
+                                    <label className={styles.label}>Tipo de Chave</label>
+                                    <select className={styles.input} value={billingData.pix_key_type} onChange={(e) => setBillingData({ ...billingData, pix_key_type: e.target.value })}>
+                                        <option value="cpf">CPF</option>
+                                        <option value="cnpj">CNPJ</option>
+                                        <option value="email">E-mail</option>
+                                        <option value="phone">Celular</option>
+                                        <option value="random">Chave Aleatória</option>
+                                    </select>
                                 </div>
-                                <label className={styles.switch}>
-                                    <input type="checkbox" defaultChecked />
-                                    <span className={styles.slider}></span>
-                                </label>
+                                <div className={styles.formGroup}>
+                                    <label className={styles.label}>Chave PIX</label>
+                                    <input type="text" className={styles.input} value={billingData.pix_key} onChange={(e) => setBillingData({ ...billingData, pix_key: e.target.value })} placeholder="Digite sua chave PIX" />
+                                </div>
+                            </div>
+                        </div>
+                        <div className={styles.card}>
+                            <div className={styles.cardHeader}>
+                                <h2 className={styles.cardTitle}>Dados Bancários</h2>
+                                <p className={styles.cardDescription}>Para transferências e relatórios financeiros.</p>
+                            </div>
+                            <div className={styles.formGroup}>
+                                <label className={styles.label}>Banco</label>
+                                <input type="text" className={styles.input} value={billingData.bank_name} onChange={(e) => setBillingData({ ...billingData, bank_name: e.target.value })} placeholder="Ex: Nubank, Itaú, Bradesco..." />
+                            </div>
+                            <div className={styles.formRow}>
+                                <div className={styles.formGroup}>
+                                    <label className={styles.label}>Agência</label>
+                                    <input type="text" className={styles.input} value={billingData.bank_agency} onChange={(e) => setBillingData({ ...billingData, bank_agency: e.target.value })} placeholder="0001" />
+                                </div>
+                                <div className={styles.formGroup}>
+                                    <label className={styles.label}>Conta</label>
+                                    <input type="text" className={styles.input} value={billingData.bank_account} onChange={(e) => setBillingData({ ...billingData, bank_account: e.target.value })} placeholder="00000-0" />
+                                </div>
                             </div>
                         </div>
                     </div>
-
-                    <div className={styles.card}>
-                        <div className={styles.cardHeader}>
-                            <h2 className={styles.cardTitle}>Zona de Perigo</h2>
-                        </div>
-                        <div className={styles.dangerZone}>
-                            <p className={styles.dangerText}>Ações irreversíveis para sua organização.</p>
-                            <button className={styles.dangerBtn}>Deletar Organização</button>
+                    <div className={styles.sideColumn}>
+                        <div className={styles.card}>
+                            <div className={styles.cardHeader}><h2 className={styles.cardTitle}>Taxas</h2></div>
+                            <div className={styles.toggleGroup}>
+                                <div style={{ padding: '8px 0', borderBottom: '1px solid #f3f4f6' }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: 4 }}>
+                                        <span style={{ color: '#374151' }}>Taxa da plataforma</span>
+                                        <span style={{ fontWeight: 600, color: '#111827' }}>0%</span>
+                                    </div>
+                                    <span style={{ fontSize: '11px', color: '#9ca3af' }}>Sem taxa de plataforma por enquanto</span>
+                                </div>
+                                <div style={{ padding: '8px 0' }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: 4 }}>
+                                        <span style={{ color: '#374151' }}>Taxa de processamento PIX</span>
+                                        <span style={{ fontWeight: 600, color: '#111827' }}>0%</span>
+                                    </div>
+                                    <span style={{ fontSize: '11px', color: '#9ca3af' }}>PIX sem taxa adicional</span>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
-            </div>
+            )}
+
+            {/* ── NOTIFICAÇÕES ── */}
+            {activeTab === 'notificacoes' && (
+                <div className={styles.contentGrid}>
+                    <div className={styles.mainColumn}>
+                        <div className={styles.card}>
+                            <div className={styles.cardHeader}>
+                                <h2 className={styles.cardTitle}>Notificações por E-mail</h2>
+                                <p className={styles.cardDescription}>Escolha quais eventos geram notificação para o e-mail da organização.</p>
+                            </div>
+                            <div className={styles.toggleGroup}>
+                                {([
+                                    { key: 'notify_new_sale', label: 'Nova venda realizada', desc: 'Receba um e-mail a cada ingresso vendido' },
+                                    { key: 'notify_payment_confirmed', label: 'Pagamento confirmado', desc: 'Quando o pagamento PIX ou boleto for aprovado' },
+                                    { key: 'notify_cancellation', label: 'Cancelamento de pedido', desc: 'Quando um participante cancelar um pedido' },
+                                    { key: 'notify_waitlist', label: 'Entrada na lista de espera', desc: 'Quando alguém entrar na lista de espera de um evento' },
+                                    { key: 'notify_form_submitted', label: 'Formulário preenchido', desc: 'Quando um participante preencher o formulário pós-compra' },
+                                ] as { key: keyof typeof notifData; label: string; desc: string }[]).map(({ key, label, desc }) => (
+                                    <div key={key} className={styles.toggleRow}>
+                                        <div className={styles.toggleInfo}>
+                                            <span className={styles.toggleLabel}>{label}</span>
+                                            <span className={styles.toggleDesc}>{desc}</span>
+                                        </div>
+                                        <label className={styles.switch}>
+                                            <input
+                                                type="checkbox"
+                                                checked={notifData[key]}
+                                                onChange={(e) => setNotifData(prev => ({ ...prev, [key]: e.target.checked }))}
+                                            />
+                                            <span className={styles.slider}></span>
+                                        </label>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+                    <div className={styles.sideColumn}>
+                        <div className={styles.card}>
+                            <div className={styles.cardHeader}><h2 className={styles.cardTitle}>E-mail de destino</h2></div>
+                            <p style={{ fontSize: '13px', color: '#6b7280', margin: '0 0 12px 0' }}>As notificações serão enviadas para:</p>
+                            <p style={{ fontSize: '14px', fontWeight: 600, color: '#111827', margin: 0 }}>{formData.email || '(sem e-mail configurado)'}</p>
+                            {!formData.email && (
+                                <p style={{ fontSize: '12px', color: '#d97706', marginTop: 8 }}>
+                                    Configure o e-mail de suporte na aba Perfil.
+                                </p>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ── INTEGRAÇÕES ── */}
         </div>
     );
 }

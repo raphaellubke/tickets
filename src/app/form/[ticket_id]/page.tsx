@@ -27,6 +27,7 @@ interface FormData {
     id: string;
     name: string;
     description: string | null;
+    isCouple: boolean;
 }
 
 export default function FormResponsePage({ params }: { params: Promise<{ ticket_id: string }> }) {
@@ -36,11 +37,14 @@ export default function FormResponsePage({ params }: { params: Promise<{ ticket_
     
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
+    const [submitted, setSubmitted] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [formData, setFormData] = useState<FormData | null>(null);
     const [formFields, setFormFields] = useState<FormField[]>([]);
     const [formResponse, setFormResponse] = useState<FormResponse | null>(null);
     const [answers, setAnswers] = useState<Record<string, string>>({});
+    const [isCouple, setIsCouple] = useState(false);
+    const [coupleAnswers, setCoupleAnswers] = useState<Record<string, { ele: string; ela: string }>>({});
     const [ticket, setTicket] = useState<any>(null);
 
     useEffect(() => {
@@ -57,7 +61,7 @@ export default function FormResponsePage({ params }: { params: Promise<{ ticket_
                     .from('tickets')
                     .select('*')
                     .eq('id', ticket_id)
-                    .single();
+                    .maybeSingle();
 
                 if (ticketError || !ticketData) {
                     setError('Ticket não encontrado');
@@ -72,7 +76,7 @@ export default function FormResponsePage({ params }: { params: Promise<{ ticket_
                     .from('form_responses')
                     .select('*')
                     .eq('ticket_id', ticket_id)
-                    .single();
+                    .maybeSingle();
 
                 if (responseError || !responseData) {
                     setError('Formulário não encontrado para este ticket');
@@ -87,7 +91,7 @@ export default function FormResponsePage({ params }: { params: Promise<{ ticket_
                     .from('forms')
                     .select('*')
                     .eq('id', responseData.form_id)
-                    .single();
+                    .maybeSingle();
 
                 if (formError || !form) {
                     setError('Formulário não encontrado');
@@ -98,8 +102,10 @@ export default function FormResponsePage({ params }: { params: Promise<{ ticket_
                 setFormData({
                     id: form.id,
                     name: form.name,
-                    description: form.description
+                    description: form.description,
+                    isCouple: form.is_couple || false,
                 });
+                setIsCouple(form.is_couple || false);
 
                 // Load form fields
                 const { data: fields, error: fieldsError } = await supabase
@@ -125,10 +131,21 @@ export default function FormResponsePage({ params }: { params: Promise<{ ticket_
 
                 if (!answersError && existingAnswers) {
                     const answersMap: Record<string, string> = {};
+                    const coupleMap: Record<string, { ele: string; ela: string }> = {};
                     existingAnswers.forEach(answer => {
+                        if (form.is_couple) {
+                            try {
+                                const parsed = JSON.parse(answer.value || '');
+                                if (parsed && typeof parsed === 'object' && 'ele' in parsed) {
+                                    coupleMap[answer.field_id] = parsed;
+                                    return;
+                                }
+                            } catch {}
+                        }
                         answersMap[answer.field_id] = answer.value || '';
                     });
                     setAnswers(answersMap);
+                    if (form.is_couple) setCoupleAnswers(coupleMap);
                 }
             } catch (err: any) {
                 console.error('Error loading form data:', err);
@@ -167,11 +184,26 @@ export default function FormResponsePage({ params }: { params: Promise<{ ticket_
         handleFieldChange(fieldId, formatted);
     };
 
+    const handleCoupleFieldChange = (fieldId: string, person: 'ele' | 'ela', value: string) => {
+        setCoupleAnswers(prev => ({
+            ...prev,
+            [fieldId]: { ...(prev[fieldId] || { ele: '', ela: '' }), [person]: value }
+        }));
+    };
+
     const validateForm = () => {
         for (const field of formFields) {
-            if (field.required && !answers[field.id]?.trim()) {
-                setError(`O campo "${field.label}" é obrigatório`);
-                return false;
+            if (field.required) {
+                if (isCouple) {
+                    const ca = coupleAnswers[field.id];
+                    if (!ca?.ele?.trim() || !ca?.ela?.trim()) {
+                        setError(`O campo "${field.label}" é obrigatório para Ele e Ela`);
+                        return false;
+                    }
+                } else if (!answers[field.id]?.trim()) {
+                    setError(`O campo "${field.label}" é obrigatório`);
+                    return false;
+                }
             }
         }
         return true;
@@ -197,7 +229,9 @@ export default function FormResponsePage({ params }: { params: Promise<{ ticket_
             const answerUpdates = formFields.map(field => ({
                 response_id: formResponse.id,
                 field_id: field.id,
-                value: answers[field.id] || null
+                value: isCouple
+                    ? JSON.stringify(coupleAnswers[field.id] || { ele: '', ela: '' })
+                    : (answers[field.id] || null),
             }));
 
             // Delete existing answers first
@@ -231,9 +265,8 @@ export default function FormResponsePage({ params }: { params: Promise<{ ticket_
                 return;
             }
 
-            // Success - redirect or show success message
-            alert('Formulário enviado com sucesso!');
-            router.push('/checkout/success?order_id=' + ticket?.order_id);
+            setSubmitted(true);
+            window.scrollTo({ top: 0, behavior: 'smooth' });
         } catch (err: any) {
             console.error('Error submitting form:', err);
             setError(err.message || 'Erro ao enviar formulário');
@@ -242,10 +275,7 @@ export default function FormResponsePage({ params }: { params: Promise<{ ticket_
         }
     };
 
-    const renderField = (field: FormField) => {
-        const value = answers[field.id] || '';
-        const fieldId = `field-${field.id}`;
-
+    const renderFieldInput = (field: FormField, value: string, onChange: (val: string) => void) => {
         switch (field.type) {
             case 'text':
             case 'email':
@@ -253,118 +283,118 @@ export default function FormResponsePage({ params }: { params: Promise<{ ticket_
                 return (
                     <input
                         type={field.type}
-                        id={fieldId}
                         value={value}
-                        onChange={(e) => handleFieldChange(field.id, e.target.value)}
+                        onChange={(e) => onChange(e.target.value)}
                         className={styles.input}
                         placeholder={field.label}
-                        required={field.required}
                     />
                 );
-
             case 'tel':
                 return (
                     <input
                         type="tel"
-                        id={fieldId}
                         value={value}
-                        onChange={(e) => handlePhoneChange(field.id, e.target.value)}
+                        onChange={(e) => onChange(formatPhone(e.target.value))}
                         className={styles.input}
                         placeholder="(00) 00000-0000"
                         maxLength={15}
-                        required={field.required}
                     />
                 );
-
             case 'date':
                 return (
                     <input
                         type="date"
-                        id={fieldId}
                         value={value}
-                        onChange={(e) => handleFieldChange(field.id, e.target.value)}
+                        onChange={(e) => onChange(e.target.value)}
                         className={styles.input}
-                        required={field.required}
                     />
                 );
-
             case 'textarea':
                 return (
                     <textarea
-                        id={fieldId}
                         value={value}
-                        onChange={(e) => handleFieldChange(field.id, e.target.value)}
+                        onChange={(e) => onChange(e.target.value)}
                         className={styles.textarea}
                         placeholder={field.label}
-                        rows={4}
-                        required={field.required}
+                        rows={isCouple ? 3 : 4}
                     />
                 );
-
-            case 'select':
-                const options = (field.options as any) || [];
+            case 'select': {
+                const opts = (field.options as any) || [];
                 return (
                     <select
-                        id={fieldId}
                         value={value}
-                        onChange={(e) => handleFieldChange(field.id, e.target.value)}
+                        onChange={(e) => onChange(e.target.value)}
                         className={styles.select}
-                        required={field.required}
                     >
-                        <option value="">Selecione uma opção</option>
-                        {options.map((option: string, index: number) => (
-                            <option key={index} value={option}>
-                                {option}
-                            </option>
+                        <option value="">Selecione</option>
+                        {opts.map((opt: string, i: number) => (
+                            <option key={i} value={opt}>{opt}</option>
                         ))}
                     </select>
                 );
-
-            case 'radio':
-                const radioOptions = (field.options as any) || [];
+            }
+            case 'radio': {
+                const radioOpts = (field.options as any) || [];
                 return (
                     <div className={styles.radioGroup}>
-                        {radioOptions.map((option: string, index: number) => (
-                            <label key={index} className={styles.radioOption}>
+                        {radioOpts.map((opt: string, i: number) => (
+                            <label key={i} className={styles.radioOption}>
                                 <input
                                     type="radio"
-                                    name={`field-${field.id}`}
-                                    value={option}
-                                    checked={value === option}
-                                    onChange={(e) => handleFieldChange(field.id, e.target.value)}
-                                    required={field.required}
+                                    name={`field-${field.id}-${value.slice(0, 3)}`}
+                                    value={opt}
+                                    checked={value === opt}
+                                    onChange={(e) => onChange(e.target.value)}
                                 />
-                                <span>{option}</span>
+                                <span>{opt}</span>
                             </label>
                         ))}
                     </div>
                 );
-
+            }
             case 'checkbox':
                 return (
                     <label className={styles.checkboxOption}>
                         <input
                             type="checkbox"
                             checked={value === 'true' || value === 'sim' || value === 'yes'}
-                            onChange={(e) => handleFieldChange(field.id, e.target.checked ? 'sim' : 'não')}
+                            onChange={(e) => onChange(e.target.checked ? 'sim' : 'não')}
                         />
                         <span>{field.label}</span>
                     </label>
                 );
-
             default:
                 return (
                     <input
                         type="text"
-                        id={fieldId}
                         value={value}
-                        onChange={(e) => handleFieldChange(field.id, e.target.value)}
+                        onChange={(e) => onChange(e.target.value)}
                         className={styles.input}
                         placeholder={field.label}
-                        required={field.required}
                     />
                 );
         }
+    };
+
+    const renderField = (field: FormField) => {
+        return renderFieldInput(field, answers[field.id] || '', (val) => handleFieldChange(field.id, val));
+    };
+
+    const renderCoupleField = (field: FormField) => {
+        const coupleVal = coupleAnswers[field.id] || { ele: '', ela: '' };
+        return (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+                <div>
+                    <div style={{ fontSize: '11px', fontWeight: 600, color: '#6b7280', marginBottom: '4px' }}>Ele</div>
+                    {renderFieldInput(field, coupleVal.ele, (val) => handleCoupleFieldChange(field.id, 'ele', val))}
+                </div>
+                <div>
+                    <div style={{ fontSize: '11px', fontWeight: 600, color: '#6b7280', marginBottom: '4px' }}>Ela</div>
+                    {renderFieldInput(field, coupleVal.ela, (val) => handleCoupleFieldChange(field.id, 'ela', val))}
+                </div>
+            </div>
+        );
     };
 
     if (loading) {
@@ -390,6 +420,32 @@ export default function FormResponsePage({ params }: { params: Promise<{ ticket_
                     <button onClick={() => router.push('/')} className={styles.backButton}>
                         Voltar ao início
                     </button>
+                </div>
+                <Footer />
+            </main>
+        );
+    }
+
+    if (submitted) {
+        return (
+            <main className={styles.main}>
+                <Header />
+                <div className={styles.container}>
+                    <div className={styles.formCard} style={{ textAlign: 'center', padding: '3rem 2rem' }}>
+                        <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2" style={{ margin: '0 auto 1.5rem' }}>
+                            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                            <polyline points="22 4 12 14.01 9 11.01"/>
+                        </svg>
+                        <h1 style={{ fontSize: '22px', fontWeight: 700, color: '#111827', marginBottom: '0.5rem' }}>
+                            Formulário enviado!
+                        </h1>
+                        <p style={{ color: '#6b7280', fontSize: '14px', marginBottom: '2rem' }}>
+                            Suas respostas foram salvas com sucesso.
+                        </p>
+                        <button onClick={() => router.push('/')} className={styles.submitButton}>
+                            Voltar ao início
+                        </button>
+                    </div>
                 </div>
                 <Footer />
             </main>
@@ -429,13 +485,23 @@ export default function FormResponsePage({ params }: { params: Promise<{ ticket_
                             </div>
                         )}
 
+                        {isCouple && (
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '1rem' }}>
+                                <div style={{ fontSize: '13px', fontWeight: 600, color: '#374151', textAlign: 'center', padding: '6px', background: '#f3f4f6', borderRadius: '6px', border: '1px solid #e5e7eb' }}>
+                                    Ele
+                                </div>
+                                <div style={{ fontSize: '13px', fontWeight: 600, color: '#374151', textAlign: 'center', padding: '6px', background: '#f3f4f6', borderRadius: '6px', border: '1px solid #e5e7eb' }}>
+                                    Ela
+                                </div>
+                            </div>
+                        )}
                         {formFields.map((field) => (
                             <div key={field.id} className={styles.formGroup}>
-                                <label htmlFor={`field-${field.id}`} className={styles.label}>
+                                <label className={styles.label}>
                                     {field.label}
                                     {field.required && <span className={styles.required}>*</span>}
                                 </label>
-                                {renderField(field)}
+                                {isCouple ? renderCoupleField(field) : renderField(field)}
                             </div>
                         ))}
 

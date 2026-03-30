@@ -100,7 +100,7 @@ function InvitePageContent({ params }: { params: Promise<{ token: string }> }) {
                 .select('id, status')
                 .eq('organization_id', inviteData.orgId)
                 .eq('user_id', user.id)
-                .single();
+                .maybeSingle();
 
             if (existingMember) {
                 if (existingMember.status === 'active') {
