@@ -70,7 +70,7 @@ export default function FormsPage() {
             const { data: newForm, error } = await supabase
                 .from('forms')
                 .insert({
-                    name: `${formToDuplicate.title || formToDuplicate.name} (Cópia)`,
+                    name: `${formToDuplicate.name} (Cópia)`,
                     description: formToDuplicate.description,
                     status: 'draft',
                     organization_id: orgId,

@@ -71,7 +71,7 @@ export default function ParticipantModal({ order, eventName, onClose, onPrintPDF
                             .select('value, form_fields(label, type, order_index)')
                             .eq('response_id', response.id);
 
-                        answers = ((answersData || []) as FormAnswerDetail[]).sort((a, b) =>
+                        answers = ((answersData || []) as unknown as FormAnswerDetail[]).sort((a, b) =>
                             (a.form_fields?.order_index || 0) - (b.form_fields?.order_index || 0)
                         );
                     }

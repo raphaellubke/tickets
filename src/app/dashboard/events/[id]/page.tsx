@@ -297,7 +297,7 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
             const rev = ordersData?.reduce((s: number, o: any) => s + parseFloat(o.total_amount || '0'), 0) ?? 0;
 
             // Calculate form status per participant
-            const allParticipants = (participantsData || []) as Participant[];
+            const allParticipants = (participantsData || []) as unknown as Participant[];
 
             // Fetch form_responses for all tickets in bulk
             const allTicketIds = allParticipants.flatMap((p: Participant) => p.tickets?.map((t: any) => t.id) || []);

@@ -1,10 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 
-export default function InviteAcceptPage() {
+function InviteAcceptContent() {
     const searchParams = useSearchParams();
     const router = useRouter();
     const supabase = createClient();
@@ -157,5 +157,13 @@ export default function InviteAcceptPage() {
                 </div>
             </div>
         </>
+    );
+}
+
+export default function InviteAcceptPage() {
+    return (
+        <Suspense fallback={null}>
+            <InviteAcceptContent />
+        </Suspense>
     );
 }
