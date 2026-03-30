@@ -157,17 +157,26 @@ async function printParticipantPDF(
 ) {
     try {
         const { pdf } = await generatePdfViaApi(order, eventName, formDetails, orgLogoBase64);
+        
+        // Converter Base64 para Blob para evitar bloqueios de navegador com Data URIs
+        const bytes = dataUriToBytes(pdf);
+        const blob = new Blob([bytes as any], { type: 'application/pdf' });
+        const objectUrl = URL.createObjectURL(blob);
+
         // Open PDF in a new tab — the browser's native PDF viewer handles saving
-        const win = window.open(pdf, '_blank');
+        const win = window.open(objectUrl, '_blank');
         if (!win) {
-            // Fallback: if pop-ups are blocked, try direct download
+            // Fallback: se os pop-ups estiverem bloqueados, força o download diretamente
             const link = document.createElement('a');
-            link.href = pdf;
+            link.href = objectUrl;
             link.download = sanitizeFilename(order.participant_name || 'participante') + '.pdf';
             document.body.appendChild(link);
             link.click();
             setTimeout(() => document.body.removeChild(link), 100);
         }
+        
+        // Limpar a memória associada à URL criada
+        setTimeout(() => URL.revokeObjectURL(objectUrl), 60000);
     } catch (err) {
         console.error('Erro ao gerar PDF:', err);
         alert('Erro ao gerar PDF: ' + (err instanceof Error ? err.message : String(err)));
