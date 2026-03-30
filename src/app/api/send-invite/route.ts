@@ -28,7 +28,7 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({
                 success: false,
                 emailSent: false,
-                inviteUrl: acceptUrl,
+                inviteUrl: emailRedirectTo,
                 error: error.message,
             }, { status: 500 });
         }
