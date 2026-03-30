@@ -22,6 +22,8 @@ export default function MembersPage() {
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
+    const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+    const [deletingId, setDeletingId] = useState<string | null>(null);
     const supabase = createClient();
 
     useEffect(() => {
@@ -48,7 +50,32 @@ export default function MembersPage() {
 
                 if (error) throw error;
 
-                setMembers(allMembers || []);
+                const membersData: Member[] = allMembers || [];
+
+                // Fetch profiles to fill in name/email for members who don't have them
+                const userIds = membersData
+                    .filter(m => m.user_id && (!m.name || !m.email))
+                    .map(m => m.user_id!);
+
+                if (userIds.length > 0) {
+                    const { data: profiles } = await supabase
+                        .from('profiles')
+                        .select('id, full_name, email')
+                        .in('id', userIds);
+
+                    if (profiles) {
+                        const profileMap = Object.fromEntries(profiles.map(p => [p.id, p]));
+                        for (const m of membersData) {
+                            if (m.user_id && profileMap[m.user_id]) {
+                                const p = profileMap[m.user_id];
+                                if (!m.name) m.name = p.full_name || '';
+                                if (!m.email) m.email = p.email || '';
+                            }
+                        }
+                    }
+                }
+
+                setMembers(membersData);
             } catch (error) {
                 console.error('Error fetching members:', error);
             } finally {
@@ -58,6 +85,34 @@ export default function MembersPage() {
 
         fetchMembers();
     }, [user]);
+
+    useEffect(() => {
+        function handleClickOutside() {
+            setOpenMenuId(null);
+        }
+        document.addEventListener('click', handleClickOutside);
+        return () => document.removeEventListener('click', handleClickOutside);
+    }, []);
+
+    const handleDeleteMember = async (member: Member) => {
+        if (!confirm(`Remover ${member.name || member.email} da organização?`)) return;
+
+        setDeletingId(member.id);
+        setOpenMenuId(null);
+        try {
+            const { error } = await supabase
+                .from('organization_members')
+                .delete()
+                .eq('id', member.id);
+
+            if (error) throw error;
+            setMembers(prev => prev.filter(m => m.id !== member.id));
+        } catch (error: any) {
+            alert('Erro ao remover membro: ' + error.message);
+        } finally {
+            setDeletingId(null);
+        }
+    };
 
     const getRoleLabel = (role: string) => {
         const roleMap: Record<string, string> = {
@@ -147,40 +202,84 @@ export default function MembersPage() {
                         </div>
 
                         <div className={styles.membersList}>
-                            {filteredMembers.map((member) => (
-                                <div key={member.id} className={styles.memberRow}>
-                                    <div className={styles.memberInfo}>
-                                        <div className={styles.avatar}>
-                                            {member.name?.[0]?.toUpperCase() || 'U'}
+                            {filteredMembers.map((member) => {
+                                const displayName = member.name || member.email || 'Sem nome';
+                                const avatarLetter = (member.name || member.email || 'U')[0].toUpperCase();
+                                const isCurrentUser = member.user_id === user?.id;
+                                const isOwner = member.role === 'owner';
+
+                                return (
+                                    <div key={member.id} className={styles.memberRow}>
+                                        <div className={styles.memberInfo}>
+                                            <div className={styles.avatar}>
+                                                {avatarLetter}
+                                            </div>
+                                            <div className={styles.details}>
+                                                <span className={styles.name}>
+                                                    {displayName}
+                                                    {isCurrentUser && <span style={{ fontSize: '11px', color: '#6b7280', marginLeft: 6 }}>(você)</span>}
+                                                </span>
+                                                {member.name && <span className={styles.email}>{member.email}</span>}
+                                            </div>
                                         </div>
-                                        <div className={styles.details}>
-                                            <span className={styles.name}>{member.name}</span>
-                                            <span className={styles.email}>{member.email}</span>
+
+                                        <div className={styles.roleCell}>
+                                            <span className={styles.roleBadge}>{getRoleLabel(member.role)}</span>
+                                        </div>
+
+                                        <div className={styles.statusCell}>
+                                            <span className={`${styles.statusDot} ${member.status === 'active' ? styles.active : styles.pending}`}></span>
+                                            <span className={styles.statusText}>
+                                                {getStatusLabel(member.status)}
+                                            </span>
+                                        </div>
+
+                                        <div className={styles.activityCell}>
+                                            {getLastActive(member.joined_at)}
+                                        </div>
+
+                                        <div className={styles.actionsCell} style={{ position: 'relative' }}>
+                                            <button
+                                                className={styles.actionBtn}
+                                                disabled={deletingId === member.id}
+                                                onClick={(e) => { e.stopPropagation(); setOpenMenuId(openMenuId === member.id ? null : member.id); }}
+                                            >
+                                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="1" /><circle cx="19" cy="12" r="1" /><circle cx="5" cy="12" r="1" /></svg>
+                                            </button>
+                                            {openMenuId === member.id && (
+                                                <div
+                                                    onClick={e => e.stopPropagation()}
+                                                    style={{
+                                                        position: 'absolute', right: 0, top: '100%', zIndex: 50,
+                                                        background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8,
+                                                        boxShadow: '0 4px 12px rgba(0,0,0,0.1)', minWidth: 160, overflow: 'hidden',
+                                                    }}>
+                                                    {!isCurrentUser && !isOwner ? (
+                                                        <button
+                                                            onClick={() => handleDeleteMember(member)}
+                                                            style={{
+                                                                width: '100%', padding: '10px 16px', textAlign: 'left',
+                                                                background: 'none', border: 'none', cursor: 'pointer',
+                                                                fontSize: 13, color: '#dc2626', display: 'flex',
+                                                                alignItems: 'center', gap: 8,
+                                                            }}
+                                                            onMouseEnter={e => (e.currentTarget.style.background = '#fef2f2')}
+                                                            onMouseLeave={e => (e.currentTarget.style.background = 'none')}
+                                                        >
+                                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+                                                            Remover membro
+                                                        </button>
+                                                    ) : (
+                                                        <div style={{ padding: '10px 16px', fontSize: 12, color: '#9ca3af' }}>
+                                                            {isCurrentUser ? 'Você não pode se remover' : 'Proprietário não pode ser removido'}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
-
-                                    <div className={styles.roleCell}>
-                                        <span className={styles.roleBadge}>{getRoleLabel(member.role)}</span>
-                                    </div>
-
-                                    <div className={styles.statusCell}>
-                                        <span className={`${styles.statusDot} ${member.status === 'active' ? styles.active : styles.pending}`}></span>
-                                        <span className={styles.statusText}>
-                                            {getStatusLabel(member.status)}
-                                        </span>
-                                    </div>
-
-                                    <div className={styles.activityCell}>
-                                        {getLastActive(member.joined_at)}
-                                    </div>
-
-                                    <div className={styles.actionsCell}>
-                                        <button className={styles.actionBtn}>
-                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="1" /><circle cx="19" cy="12" r="1" /><circle cx="5" cy="12" r="1" /></svg>
-                                        </button>
-                                    </div>
-                                </div>
-                            ))}
+                                );
+                            })}
                         </div>
                     </div>
                 </div>

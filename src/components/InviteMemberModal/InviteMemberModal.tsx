@@ -147,10 +147,6 @@ export default function InviteMemberModal({ isOpen, onClose, onSuccess }: Invite
                 throw new Error('Este email já está na organização');
             }
 
-            // Generate invite token
-            const token = generateInviteToken();
-            const inviteUrl = `${window.location.origin}/invite/${token}?org=${memberData.organization_id}&role=${role}&email=${encodeURIComponent(email)}`;
-
             // Create pending member
             const { error: insertError } = await supabase
                 .from('organization_members')
@@ -161,15 +157,29 @@ export default function InviteMemberModal({ isOpen, onClose, onSuccess }: Invite
                     status: 'pending',
                     invited_by: user.id,
                     invited_at: new Date().toISOString(),
-                    name: email.split('@')[0], // Temporary name
+                    name: email.split('@')[0],
                 }]);
 
             if (insertError) {
                 throw insertError;
             }
 
-            // TODO: Send email with invite link
-            // For now, just show success message
+            // Send invite email via API
+            const res = await fetch('/api/send-invite', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    email,
+                    orgId: memberData.organization_id,
+                    role,
+                }),
+            });
+
+            const result = await res.json();
+            if (!result.success) {
+                // Member was created but email failed — don't block success
+                console.warn('Email not sent:', result.error);
+            }
 
             if (onSuccess) {
                 onSuccess();
