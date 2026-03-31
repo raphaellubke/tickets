@@ -12,6 +12,7 @@ interface FormField {
     required: boolean;
     options: string[];
     order_index: number;
+    is_couple_field?: boolean | null;
 }
 
 interface FormResponse {
@@ -169,7 +170,7 @@ export default function FormResponsePage({ params }: { params: Promise<{ ticket_
                 if (answers[field.id] !== 'sim') errors.add(field.id);
                 continue;
             }
-            if (isCouple) {
+            if (isCouple && field.is_couple_field !== false) {
                 const ca = coupleAnswers[field.id];
                 if (!ca?.ele?.trim() || !ca?.ela?.trim()) errors.add(field.id);
             } else if (!answers[field.id]?.trim()) {
@@ -206,7 +207,7 @@ export default function FormResponsePage({ params }: { params: Promise<{ ticket_
                 .map(field => ({
                     response_id: formResponse.id,
                     field_id: field.id,
-                    value: isCouple
+                    value: (isCouple && field.is_couple_field !== false)
                         ? JSON.stringify(coupleAnswers[field.id] || { ele: '', ela: '' })
                         : (answers[field.id] || null),
                 }));
@@ -488,7 +489,9 @@ export default function FormResponsePage({ params }: { params: Promise<{ ticket_
                     {/* Fields */}
                     <div className={styles.fields}>
                         {step?.fields.map(field =>
-                            isCouple ? renderCoupleField(field) : renderField(field)
+                            isCouple && field.is_couple_field !== false
+                                ? renderCoupleField(field)
+                                : renderField(field)
                         )}
                     </div>
 
