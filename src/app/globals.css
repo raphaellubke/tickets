@@ -63,7 +63,7 @@ a {
 @keyframes fadeInUp {
   from {
     opacity: 0;
-    transform: translateY(30px);
+    transform: translateY(12px);
   }
 
   to {
@@ -74,31 +74,23 @@ a {
 
 /* Apply fade-in to main sections */
 section {
-  animation: fadeInUp 0.6s ease-out;
+  animation: fadeInUp 0.35s ease-out;
   animation-fill-mode: both;
 }
 
 /* Stagger animations for consecutive sections */
-section:nth-child(1) {
-  animation-delay: 0s;
-}
+section:nth-child(1) { animation-delay: 0s; }
+section:nth-child(2) { animation-delay: 0.07s; }
+section:nth-child(3) { animation-delay: 0.14s; }
+section:nth-child(4) { animation-delay: 0.21s; }
+section:nth-child(5) { animation-delay: 0.28s; }
+section:nth-child(6) { animation-delay: 0.35s; }
 
-section:nth-child(2) {
-  animation-delay: 0.1s;
-}
-
-section:nth-child(3) {
-  animation-delay: 0.2s;
-}
-
-section:nth-child(4) {
-  animation-delay: 0.3s;
-}
-
-section:nth-child(5) {
-  animation-delay: 0.4s;
-}
-
-section:nth-child(6) {
-  animation-delay: 0.5s;
+/* Respect OS-level "reduce motion" setting */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

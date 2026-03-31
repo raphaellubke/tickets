@@ -20,6 +20,7 @@ interface CheckoutTicket {
     ticketTypeName: string;
     ticketGroupName: string;
     price: number;
+    priceCard: number | null;
 }
 
 interface CheckoutData {
@@ -56,6 +57,20 @@ function CheckoutPageContent() {
     } | null>(null);
     const [couponLoading, setCouponLoading] = useState(false);
     const [couponError, setCouponError] = useState<string | null>(null);
+
+    // Reservation state
+    const [reservationSessionId] = useState<string>(() => {
+        if (typeof window === 'undefined') return '';
+        const existing = sessionStorage.getItem('reservationSessionId');
+        if (existing) return existing;
+        const newId = crypto.randomUUID();
+        sessionStorage.setItem('reservationSessionId', newId);
+        return newId;
+    });
+    const [reservationExpiresAt, setReservationExpiresAt] = useState<Date | null>(null);
+    const [reservationExpired, setReservationExpired]     = useState(false);
+    const [timeRemaining, setTimeRemaining]               = useState(0);
+    const [reservationError, setReservationError]         = useState<string | null>(null);
 
     // Multi-step state
     const [checkoutStep, setCheckoutStep] = useState<CheckoutStep>('details');
@@ -100,6 +115,7 @@ function CheckoutPageContent() {
                             ticketTypeName: ticketType.name,
                             ticketGroupName: groupName,
                             price: parseFloat(ticketType.price?.toString() || '0'),
+                            priceCard: ticketType.price_card ? parseFloat(ticketType.price_card.toString()) : null,
                         };
                     })
                 );
@@ -107,6 +123,25 @@ function CheckoutPageContent() {
                 const validTickets = ticketsWithDetails.filter(Boolean) as CheckoutTicket[];
                 setCheckoutTickets(validTickets);
                 setTotal(checkoutData.total);
+
+                // Create reservation immediately — holds tickets for 10 minutes
+                const sessionId = sessionStorage.getItem('reservationSessionId') || reservationSessionId;
+                const reserveItems = checkoutData.tickets.map(t => ({
+                    ticket_type_id: t.ticketTypeId,
+                    quantity: t.quantity,
+                }));
+                const { data: resResult, error: resError } = await supabase.rpc('reserve_tickets', {
+                    p_items: reserveItems,
+                    p_session_id: sessionId,
+                });
+                if (resError || !resResult?.success) {
+                    setReservationError(
+                        resResult?.error || resError?.message || 'Não foi possível reservar os ingressos'
+                    );
+                    setLoading(false);
+                    return;
+                }
+                setReservationExpiresAt(new Date(resResult.expires_at));
 
                 if (user) {
                     const { data: profile } = await supabase
@@ -152,6 +187,7 @@ function CheckoutPageContent() {
                             ticketTypeName: ticketType?.name || '',
                             ticketGroupName: groupName,
                             price: parseFloat(item.unit_price?.toString() || '0'),
+                            priceCard: null,
                         };
                     })
                 );
@@ -244,13 +280,18 @@ function CheckoutPageContent() {
 
             if (orderError) { setError('Erro ao criar pedido: ' + orderError.message); return null; }
 
-            const orderItems = checkoutTickets.map(ticket => ({
-                order_id: orderData.id,
-                ticket_type_id: ticket.ticketTypeId,
-                quantity: ticket.quantity,
-                unit_price: ticket.price,
-                total_price: ticket.quantity * parseFloat(ticket.price.toString()),
-            }));
+            const orderItems = checkoutTickets.map(ticket => {
+                const effectivePrice = paymentMethod === 'card' && ticket.priceCard && ticket.priceCard > 0
+                    ? ticket.priceCard
+                    : ticket.price;
+                return {
+                    order_id: orderData.id,
+                    ticket_type_id: ticket.ticketTypeId,
+                    quantity: ticket.quantity,
+                    unit_price: effectivePrice,
+                    total_price: ticket.quantity * effectivePrice,
+                };
+            });
 
             const { error: itemsError } = await supabase.from('order_items').insert(orderItems);
             if (itemsError) { setError('Erro ao criar itens do pedido'); return null; }
@@ -304,6 +345,15 @@ function CheckoutPageContent() {
                         .select().single();
 
                     if (ticketError || !ticket) continue;
+
+                    // Atomic capacity check — if at capacity, remove the ticket just created
+                    const { data: incremented } = await supabase.rpc('increment_quantity_sold', { p_ticket_type_id: item.ticket_type_id });
+                    if (!incremented) {
+                        await supabase.from('tickets').delete().eq('id', ticket.id);
+                        console.warn('Ticket oversell prevented for type:', item.ticket_type_id);
+                        continue;
+                    }
+
                     tickets.push(ticket);
 
                     const { data: eventData } = await supabase
@@ -325,8 +375,6 @@ function CheckoutPageContent() {
                             }
                         }
                     }
-
-                    await supabase.rpc('increment_quantity_sold', { p_ticket_type_id: item.ticket_type_id });
                 }
             }
             return tickets;
@@ -340,6 +388,31 @@ function CheckoutPageContent() {
     useEffect(() => {
         return () => { if (pixPollingRef.current) clearInterval(pixPollingRef.current); };
     }, []);
+
+    // Countdown timer for reservation
+    useEffect(() => {
+        if (!reservationExpiresAt) return;
+        const tick = () => {
+            const remaining = Math.max(0, Math.floor((reservationExpiresAt.getTime() - Date.now()) / 1000));
+            setTimeRemaining(remaining);
+            if (remaining === 0) setReservationExpired(true);
+        };
+        tick();
+        const interval = setInterval(tick, 1000);
+        return () => clearInterval(interval);
+    }, [reservationExpiresAt]);
+
+    async function releaseReservation() {
+        try {
+            const sessionId = sessionStorage.getItem('reservationSessionId') || reservationSessionId;
+            if (sessionId) {
+                await supabase.rpc('release_reservation', { p_session_id: sessionId });
+                sessionStorage.removeItem('reservationSessionId');
+            }
+        } catch {
+            // Non-critical — reservation will expire automatically in 10 min
+        }
+    }
 
     // Load MP.js when on card step
     useEffect(() => {
@@ -389,6 +462,17 @@ function CheckoutPageContent() {
         }
     }, [checkoutStep]);
 
+    // Recompute total when payment method changes (PIX vs card pricing)
+    useEffect(() => {
+        if (checkoutTickets.length === 0) return;
+        const newTotal = checkoutTickets.reduce((sum, t) => {
+            const price = paymentMethod === 'card' && t.priceCard && t.priceCard > 0 ? t.priceCard : t.price;
+            return sum + price * t.quantity;
+        }, 0);
+        setTotal(newTotal);
+        setAppliedCoupon(null); // reset coupon when price changes
+    }, [paymentMethod, checkoutTickets]);
+
     async function handleContinue() {
         if (!customerData.name || !customerData.email) { setError('Preencha nome e e-mail'); return; }
 
@@ -431,6 +515,7 @@ function CheckoutPageContent() {
     async function handleFreePayment(order: any) {
         // Free events — no payment record needed, just process tickets directly
         await processApprovedPayment(order.id);
+        await releaseReservation();
         sessionStorage.removeItem('checkoutData');
         router.push(`/checkout/success?order_id=${order.id}`);
     }
@@ -456,6 +541,7 @@ function CheckoutPageContent() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 orderId: order.id,
+                orderNumber: order.order_number,
                 amount: finalTotal,
                 payerEmail: customerData.email,
                 payerName: customerData.name,
@@ -497,6 +583,7 @@ function CheckoutPageContent() {
                         updated_at: new Date().toISOString(),
                     }).eq('id', dbPaymentId);
                     await processApprovedPayment(orderId);
+                    await releaseReservation();
                     sessionStorage.removeItem('checkoutData');
                     router.push(`/checkout/success?order_id=${orderId}`);
                 } else if (data.status === 'rejected' || data.status === 'cancelled') {
@@ -537,6 +624,7 @@ function CheckoutPageContent() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 orderId: order.id,
+                orderNumber: order.order_number,
                 amount: finalTotal,
                 token,
                 installments,
@@ -566,6 +654,7 @@ function CheckoutPageContent() {
             }).eq('id', paymentData.id);
             await supabase.from('orders').update({ payment_method: 'card' }).eq('id', order.id);
             await processApprovedPayment(order.id);
+            await releaseReservation();
             sessionStorage.removeItem('checkoutData');
             router.push(`/checkout/success?order_id=${order.id}`);
         } else {
@@ -620,11 +709,76 @@ function CheckoutPageContent() {
         );
     }
 
+    // Reservation failed — tickets grabbed by someone else
+    if (reservationError) {
+        return (
+            <main className={styles.main}>
+                <Header />
+                <div className={styles.errorContainer}>
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="1.5">
+                        <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+                    </svg>
+                    <h2>Ingressos Indisponíveis</h2>
+                    <p>{reservationError}</p>
+                    <button
+                        onClick={() => { sessionStorage.removeItem('checkoutData'); router.push(`/event/${eventId}`); }}
+                        className={styles.backButton}
+                    >
+                        Voltar para o evento
+                    </button>
+                </div>
+                <Footer />
+            </main>
+        );
+    }
+
+    // Reservation expired — 10 minutes ran out
+    if (reservationExpired) {
+        return (
+            <main className={styles.main}>
+                <Header />
+                <div className={styles.errorContainer}>
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth="1.5">
+                        <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+                    </svg>
+                    <h2>Reserva Expirada</h2>
+                    <p>Seu tempo de 10 minutos expirou e os ingressos foram liberados.</p>
+                    <button
+                        onClick={() => {
+                            sessionStorage.removeItem('checkoutData');
+                            sessionStorage.removeItem('reservationSessionId');
+                            router.push(`/event/${eventId}`);
+                        }}
+                        className={styles.backButton}
+                    >
+                        Voltar para o evento
+                    </button>
+                </div>
+                <Footer />
+            </main>
+        );
+    }
+
     return (
         <main className={styles.main}>
             <Header />
 
             <div className={styles.container}>
+                {/* Reservation countdown banner */}
+                {reservationExpiresAt && !reservationExpired && (
+                    <div className={styles.reservationTimer}>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+                        </svg>
+                        <span>
+                            Ingressos reservados por{' '}
+                            <strong>
+                                {String(Math.floor(timeRemaining / 60)).padStart(2, '0')}:{String(timeRemaining % 60).padStart(2, '0')}
+                            </strong>
+                        </span>
+                    </div>
+                )}
+
                 {/* ─── STEP: DETAILS ─── */}
                 {checkoutStep === 'details' && (
                     <div className={styles.content}>
@@ -653,7 +807,9 @@ function CheckoutPageContent() {
                                             <span className={styles.ticketName}>{ticket.ticketTypeName}</span>
                                             <span className={styles.ticketQuantity}>x{ticket.quantity}</span>
                                         </div>
-                                        <span className={styles.ticketPrice}>{formatPrice(ticket.price * ticket.quantity)}</span>
+                                        <span className={styles.ticketPrice}>{formatPrice(
+                                            (paymentMethod === 'card' && ticket.priceCard && ticket.priceCard > 0 ? ticket.priceCard : ticket.price) * ticket.quantity
+                                        )}</span>
                                     </div>
                                 ))}
                             </div>

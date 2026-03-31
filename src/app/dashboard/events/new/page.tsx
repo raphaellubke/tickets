@@ -12,9 +12,7 @@ interface EventFormData {
     title: string;
     description: string;
     date: string;
-    time: string;
     endDate: string;
-    endTime: string;
     location: string;
     address: string;
     addressNotes: string;
@@ -41,6 +39,7 @@ interface TicketType {
     name: string;
     description: string;
     price: string;
+    priceCard: string;
     quantityAvailable: string;
     startSale: string;
     endSale: string;
@@ -60,9 +59,7 @@ export default function NewEventPage() {
         title: '',
         description: '',
         date: '',
-        time: '',
         endDate: '',
-        endTime: '',
         location: '',
         address: '',
         addressNotes: '',
@@ -173,6 +170,11 @@ export default function NewEventPage() {
         updateTicketType(groupId, typeId, 'price', numeric);
     };
 
+    const handlePriceCardChange = (groupId: string, typeId: string, value: string) => {
+        const numeric = parseBRL(value);
+        updateTicketType(groupId, typeId, 'priceCard', numeric);
+    };
+
     // Load event data when in edit mode
     useEffect(() => {
         if (isEditMode && eventId && user) {
@@ -228,9 +230,7 @@ export default function NewEventPage() {
                 title: event.name || '',
                 description: event.description || '',
                 date: event.event_date || '',
-                time: event.event_time || '',
                 endDate: event.end_date || '',
-                endTime: event.end_time || '',
                 location: event.location || '',
                 address: event.address || '',
                 addressNotes: event.address_notes || '',
@@ -269,6 +269,7 @@ export default function NewEventPage() {
                         name: type.name,
                         description: type.description || '',
                         price: type.price?.toString() || '0',
+                        priceCard: type.price_card?.toString() || '0',
                         quantityAvailable: type.quantity_available?.toString() || '0',
                         startSale: type.start_sale ? new Date(type.start_sale).toISOString().slice(0, 16) : '',
                         endSale: type.end_sale ? new Date(type.end_sale).toISOString().slice(0, 16) : '',
@@ -325,6 +326,7 @@ export default function NewEventPage() {
                     name: '',
                     description: '',
                     price: '0',
+                    priceCard: '0',
                     quantityAvailable: '0',
                     startSale: '',
                     endSale: '',
@@ -366,10 +368,6 @@ export default function NewEventPage() {
         }
         if (!formData.date) {
             setError('A data do evento é obrigatória');
-            return false;
-        }
-        if (!formData.time) {
-            setError('O horário do evento é obrigatório');
             return false;
         }
         if (!formData.location.trim()) {
@@ -426,9 +424,7 @@ export default function NewEventPage() {
                 category: formData.category || null,
                 status: formData.status || 'draft',
                 event_date: formData.date,
-                event_time: formData.time,
                 end_date: formData.endDate || null,
-                end_time: formData.endTime || null,
                 location: formData.location.trim() || '',
                 address: formData.address || null,
                 address_notes: formData.addressNotes || null,
@@ -584,6 +580,7 @@ export default function NewEventPage() {
                                 name: type.name,
                                 description: type.description || null,
                                 price: parseFloat(type.price) || 0,
+                                price_card: parseFloat(type.priceCard) > 0 ? parseFloat(type.priceCard) : null,
                                 quantity_available: parseInt(type.quantityAvailable) || 0,
                                 start_sale: type.startSale ? new Date(type.startSale).toISOString() : null,
                                 end_sale: type.endSale ? new Date(type.endSale).toISOString() : null,
@@ -601,6 +598,7 @@ export default function NewEventPage() {
                                 name: type.name,
                                 description: type.description || null,
                                 price: parseFloat(type.price) || 0,
+                                price_card: parseFloat(type.priceCard) > 0 ? parseFloat(type.priceCard) : null,
                                 quantity_available: parseInt(type.quantityAvailable) || 0,
                                 start_sale: type.startSale ? new Date(type.startSale).toISOString() : null,
                                 end_sale: type.endSale ? new Date(type.endSale).toISOString() : null,
@@ -724,23 +722,6 @@ export default function NewEventPage() {
                                 </div>
 
                                 <div className={styles.formGroup}>
-                                    <label htmlFor="time" className={styles.label}>
-                                        Horário *
-                                    </label>
-                                    <input
-                                        type="time"
-                                        id="time"
-                                        name="time"
-                                        value={formData.time}
-                                        onChange={handleInputChange}
-                                        className={styles.input}
-                                        required
-                                    />
-                                </div>
-                            </div>
-
-                            <div className={styles.formRow}>
-                                <div className={styles.formGroup}>
                                     <label htmlFor="endDate" className={styles.label}>
                                         Data de Término
                                     </label>
@@ -749,20 +730,6 @@ export default function NewEventPage() {
                                         id="endDate"
                                         name="endDate"
                                         value={formData.endDate}
-                                        onChange={handleInputChange}
-                                        className={styles.input}
-                                    />
-                                </div>
-
-                                <div className={styles.formGroup}>
-                                    <label htmlFor="endTime" className={styles.label}>
-                                        Horário de Término
-                                    </label>
-                                    <input
-                                        type="time"
-                                        id="endTime"
-                                        name="endTime"
-                                        value={formData.endTime}
                                         onChange={handleInputChange}
                                         className={styles.input}
                                     />
@@ -1092,7 +1059,7 @@ export default function NewEventPage() {
                                                                 </button>
                                                             </div>
 
-                                                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '0.75rem' }}>
+                                                            <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: '0.75rem', marginBottom: '0.75rem' }}>
                                                                 <div>
                                                                     <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', marginBottom: '0.25rem', color: '#374151' }}>
                                                                         Nome *
@@ -1114,13 +1081,32 @@ export default function NewEventPage() {
                                                                 </div>
                                                                 <div>
                                                                     <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', marginBottom: '0.25rem', color: '#374151' }}>
-                                                                        Preço (R$)
+                                                                        Preço PIX (R$)
                                                                     </label>
                                                                     <input
                                                                         type="text"
                                                                         placeholder="R$ 0,00"
                                                                         value={formatBRL(type.price)}
                                                                         onChange={(e) => handlePriceChange(group.id, type.id, e.target.value)}
+                                                                        style={{
+                                                                            width: '100%',
+                                                                            padding: '0.5rem',
+                                                                            border: '1px solid #d1d5db',
+                                                                            color: '#111827',
+                                                                            borderRadius: '4px',
+                                                                            fontSize: '0.875rem'
+                                                                        }}
+                                                                    />
+                                                                </div>
+                                                                <div>
+                                                                    <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', marginBottom: '0.25rem', color: '#374151' }}>
+                                                                        Preço Cartão (R$)
+                                                                    </label>
+                                                                    <input
+                                                                        type="text"
+                                                                        placeholder="R$ 0,00"
+                                                                        value={formatBRL(type.priceCard)}
+                                                                        onChange={(e) => handlePriceCardChange(group.id, type.id, e.target.value)}
                                                                         style={{
                                                                             width: '100%',
                                                                             padding: '0.5rem',
@@ -1176,7 +1162,7 @@ export default function NewEventPage() {
                                                                         Início da Venda
                                                                     </label>
                                                                     <input
-                                                                        type="datetime-local"
+                                                                        type="date"
                                                                         value={type.startSale}
                                                                         onChange={(e) => updateTicketType(group.id, type.id, 'startSale', e.target.value)}
                                                                         style={{
@@ -1194,7 +1180,7 @@ export default function NewEventPage() {
                                                                         Fim da Venda
                                                                     </label>
                                                                     <input
-                                                                        type="datetime-local"
+                                                                        type="date"
                                                                         value={type.endSale}
                                                                         onChange={(e) => updateTicketType(group.id, type.id, 'endSale', e.target.value)}
                                                                         style={{
@@ -1276,7 +1262,6 @@ export default function NewEventPage() {
                                             {formData.date && (
                                                 <p className={styles.previewMeta}>
                                                     📅 {new Date(formData.date).toLocaleDateString('pt-BR')}
-                                                    {formData.time && ` às ${formData.time}`}
                                                 </p>
                                             )}
                                             {formData.location && (

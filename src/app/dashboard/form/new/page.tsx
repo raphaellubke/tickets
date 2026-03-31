@@ -20,6 +20,38 @@ interface FormData {
     description: string;
     status: string;
     isCouple: boolean;
+    hasShirts: boolean;
+    hasTentNotice: boolean;
+}
+
+const SHIRT_SIZES = ['PP', 'P', 'M', 'G', 'GG', 'XG', 'XXG'];
+
+function makeShirtField(label: string, orderIndex: number): FormField {
+    return {
+        id: `temp-shirt-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        label,
+        type: 'shirt_size',
+        required: true,
+        options: SHIRT_SIZES,
+        orderIndex,
+    };
+}
+
+function withoutShirtFields(fields: FormField[]): FormField[] {
+    return fields.filter(f => f.type !== 'shirt_size');
+}
+
+function addShirtFields(fields: FormField[], isCouple: boolean): FormField[] {
+    const base = withoutShirtFields(fields);
+    const startIndex = base.length;
+    if (isCouple) {
+        return [
+            ...base,
+            makeShirtField('Tamanho da Camisa (Homem)', startIndex),
+            makeShirtField('Tamanho da Camisa (Mulher)', startIndex + 1),
+        ];
+    }
+    return [...base, makeShirtField('Tamanho da Camisa', startIndex)];
 }
 
 export default function NewFormPage() {
@@ -36,6 +68,8 @@ export default function NewFormPage() {
         description: '',
         status: 'draft',
         isCouple: false,
+        hasShirts: false,
+        hasTentNotice: false,
     });
 
     const [fields, setFields] = useState<FormField[]>([]);
@@ -89,6 +123,8 @@ export default function NewFormPage() {
                 description: form.description || '',
                 status: form.status || 'draft',
                 isCouple: form.is_couple || false,
+                hasShirts: form.has_shirts || false,
+                hasTentNotice: form.has_tent_notice || false,
             });
 
             // Load form fields
@@ -232,6 +268,8 @@ export default function NewFormPage() {
                 created_by: user.id,
                 is_active: formData.status === 'active',
                 is_couple: formData.isCouple || false,
+                has_shirts: formData.hasShirts || false,
+                has_tent_notice: formData.hasTentNotice || false,
             };
 
             let currentFormId = formId;
@@ -440,13 +478,67 @@ export default function NewFormPage() {
                             <input
                                 type="checkbox"
                                 checked={formData.isCouple}
-                                onChange={(e) => setFormData(prev => ({ ...prev, isCouple: e.target.checked }))}
+                                onChange={(e) => {
+                                    const isCouple = e.target.checked;
+                                    setFormData(prev => ({ ...prev, isCouple }));
+                                    if (formData.hasShirts) {
+                                        setFields(prev => addShirtFields(prev, isCouple));
+                                    }
+                                }}
                                 style={{ width: '16px', height: '16px', cursor: 'pointer' }}
                             />
                             <span style={{ fontSize: '0.875rem', color: '#374151' }}>
                                 Formulário de casal (campos Ele / Ela)
                             </span>
                         </label>
+                    </div>
+
+                    <div className={styles.formGroup}>
+                        <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+                            <input
+                                type="checkbox"
+                                checked={formData.hasShirts}
+                                onChange={(e) => {
+                                    const hasShirts = e.target.checked;
+                                    setFormData(prev => ({ ...prev, hasShirts }));
+                                    setFields(prev =>
+                                        hasShirts
+                                            ? addShirtFields(prev, formData.isCouple)
+                                            : withoutShirtFields(prev)
+                                    );
+                                }}
+                                style={{ width: '16px', height: '16px', cursor: 'pointer' }}
+                            />
+                            <span style={{ fontSize: '0.875rem', color: '#374151' }}>
+                                Este formulário inclui tamanho de camisa
+                            </span>
+                        </label>
+                        {formData.hasShirts && (
+                            <p style={{ margin: '4px 0 0 24px', fontSize: '0.75rem', color: '#6b7280' }}>
+                                {formData.isCouple
+                                    ? 'Serão adicionados campos: Tamanho da Camisa (Homem) e Tamanho da Camisa (Mulher)'
+                                    : 'Será adicionado um campo: Tamanho da Camisa'}
+                            </p>
+                        )}
+                    </div>
+
+                    <div className={styles.formGroup}>
+                        <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+                            <input
+                                type="checkbox"
+                                checked={formData.hasTentNotice}
+                                onChange={(e) => setFormData(prev => ({ ...prev, hasTentNotice: e.target.checked }))}
+                                style={{ width: '16px', height: '16px', cursor: 'pointer' }}
+                            />
+                            <span style={{ fontSize: '0.875rem', color: '#374151' }}>
+                                Exibir aviso: "Trazer sua Barraca"
+                            </span>
+                        </label>
+                        {formData.hasTentNotice && (
+                            <p style={{ margin: '4px 0 0 24px', fontSize: '0.75rem', color: '#6b7280' }}>
+                                Um aviso destacado será exibido no formulário pedindo que o participante traga sua barraca.
+                            </p>
+                        )}
                     </div>
                 </div>
 
@@ -537,6 +629,7 @@ export default function NewFormPage() {
                                                             cursor: 'pointer'
                                                         }}
                                                     >
+                                                        <option value="section_header">── Divisor de Seção</option>
                                                         <option value="text">Texto</option>
                                                         <option value="email">Email</option>
                                                         <option value="number">Número</option>
@@ -546,9 +639,38 @@ export default function NewFormPage() {
                                                         <option value="select">Seleção (Select)</option>
                                                         <option value="radio">Seleção (Radio)</option>
                                                         <option value="checkbox">Checkbox</option>
+                                                        <option value="shirt_size">Tamanho de Camisa</option>
+                                                        <option value="clause">Cláusula (aceite)</option>
                                                     </select>
                                                 </div>
                                             </div>
+
+                                            {field.type === 'clause' && (
+                                                <div style={{ marginBottom: '1rem' }}>
+                                                    <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', marginBottom: '0.5rem', color: '#374151' }}>
+                                                        Texto da cláusula
+                                                    </label>
+                                                    <textarea
+                                                        placeholder="Digite o texto completo da cláusula de desistência..."
+                                                        value={field.options[0] || ''}
+                                                        onChange={(e) => updateField(field.id, { options: [e.target.value] })}
+                                                        rows={5}
+                                                        style={{
+                                                            width: '100%',
+                                                            padding: '0.5rem',
+                                                            border: '1px solid #d1d5db',
+                                                            borderRadius: '4px',
+                                                            fontSize: '0.875rem',
+                                                            color: '#111827',
+                                                            resize: 'vertical',
+                                                            fontFamily: 'inherit',
+                                                        }}
+                                                    />
+                                                    <p style={{ fontSize: '0.75rem', color: '#6b7280', margin: '4px 0 0' }}>
+                                                        O participante verá esse texto e deverá marcar "Li e aceito" para prosseguir.
+                                                    </p>
+                                                </div>
+                                            )}
 
                                             {(field.type === 'select' || field.type === 'radio') && (
                                                 <div style={{ marginBottom: '1rem' }}>

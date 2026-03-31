@@ -64,6 +64,7 @@
     background-position: center;
     z-index: 1;
     animation: slowZoom 35s infinite alternate ease-in-out;
+    will-change: transform;
 }
 
 @keyframes slowZoom {
@@ -517,8 +518,8 @@
 }
 
 .quantityBtn {
-    width: 36px;
-    height: 36px;
+    width: 44px;
+    height: 44px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -527,8 +528,10 @@
     border: none;
     border-radius: 8px;
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: background 0.15s ease;
     line-height: 1;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
 }
 
 .quantityBtn:hover:not(:disabled) {
@@ -588,13 +591,15 @@
     font-size: 1.125rem;
     font-weight: 700;
     cursor: pointer;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: background 0.2s ease, transform 0.15s ease, box-shadow 0.2s ease;
     margin-bottom: 1rem;
     display: flex;
     align-items: center;
     justify-content: center;
     gap: 0.75rem;
-    box-shadow: 0 10px 25px -5px rgba(59, 130, 246, 0.4);
+    box-shadow: 0 6px 16px -4px rgba(59, 130, 246, 0.4);
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
 }
 
 .buyButton:hover:not(.disabled) {
@@ -663,16 +668,22 @@
 }
 
 @media (max-width: 768px) {
+    /* Disable heavy zoom animation on mobile GPU */
+    .heroImage {
+        animation: none;
+    }
+
     .heroSection {
-        min-height: 60vh;
+        min-height: 55vh;
     }
 
     .heroContainer {
-        padding: 3rem 1.5rem 2rem;
+        max-width: 100%;
+        padding: 2.5rem 1.25rem 1.75rem;
     }
 
     .eventTitle {
-        font-size: 2.5rem;
+        font-size: 2.25rem;
     }
 
     .eventMeta {
@@ -682,31 +693,34 @@
 
     .metaCard {
         width: 100%;
+        padding: 0.75rem 1rem;
     }
 
     .contentWrapper {
-        padding: 2rem 0;
+        padding: 1.5rem 0;
     }
 
     .container {
-        padding: 0 1.5rem;
-        gap: 2rem;
+        max-width: 100%;
+        padding: 0 1.25rem;
+        gap: 1.5rem;
     }
 
     .section {
-        padding: 1.5rem;
+        padding: 1.25rem;
+        border-radius: 16px;
     }
 
     .sectionTitle {
-        font-size: 1.5rem;
+        font-size: 1.375rem;
     }
 
     .ticketCard {
-        padding: 1.5rem;
+        padding: 1.25rem;
     }
 
     .ticketTypeCard {
-        padding: 1rem;
+        padding: 0.875rem;
     }
 
     .infoGrid {
@@ -714,21 +728,17 @@
     }
 }
 
-@media (max-width: 768px) {
-    .heroContainer {
-        max-width: 100%;
-        padding: 0 20px;
-    }
-
-    .container {
-        max-width: 100%;
-        padding: 0 20px;
-    }
-}
-
 @media (max-width: 640px) {
+    .heroSection {
+        min-height: 45vh;
+    }
+
+    .heroContainer {
+        padding: 2rem 1rem 1.5rem;
+    }
+
     .eventTitle {
-        font-size: 2rem;
+        font-size: 1.75rem;
     }
 
     .ticketTypeContent {
@@ -747,5 +757,32 @@
     .quantityControls {
         width: 100%;
         justify-content: center;
+    }
+}
+
+@media (max-width: 480px) {
+    .heroSection {
+        min-height: 40vh;
+    }
+
+    .eventTitle {
+        font-size: 1.5rem;
+    }
+
+    .categoryBadge {
+        font-size: 0.75rem;
+        padding: 0.5rem 0.875rem;
+    }
+
+    .metaCard {
+        gap: 0.75rem;
+    }
+
+    .metaValue {
+        font-size: 0.9rem;
+    }
+
+    .section {
+        padding: 1rem;
     }
 }

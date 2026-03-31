@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server';
 export async function POST(request: Request) {
     try {
         const {
-            orderId, amount, token, installments,
+            orderId, orderNumber, amount, token, installments,
             paymentMethodId, issuerId,
             payerEmail, payerCpf, payerName,
         } = await request.json();
@@ -26,7 +26,7 @@ export async function POST(request: Request) {
                     number: (payerCpf || '').replace(/\D/g, ''),
                 },
             },
-            external_reference: orderId,
+            external_reference: orderNumber || orderId,
             notification_url: `${process.env.NEXT_PUBLIC_SITE_URL}/api/mercadopago/webhook`,
         };
 

@@ -1,10 +1,8 @@
 'use client';
 
-import { useState, useEffect, use } from 'react';
+import { useState, useEffect, use, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
-import Header from '@/components/Header/Header';
-import Footer from '@/components/Footer/Footer';
 import styles from './page.module.css';
 
 interface FormField {
@@ -23,504 +21,470 @@ interface FormResponse {
     status: string;
 }
 
-interface FormData {
+interface FormMeta {
     id: string;
     name: string;
     description: string | null;
     isCouple: boolean;
+    hasTentNotice: boolean;
 }
+
+interface Step {
+    title: string;
+    fields: FormField[];
+}
+
 
 export default function FormResponsePage({ params }: { params: Promise<{ ticket_id: string }> }) {
     const { ticket_id } = use(params);
     const router = useRouter();
     const supabase = createClient();
-    
+
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
     const [submitted, setSubmitted] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const [formData, setFormData] = useState<FormData | null>(null);
+    const [formMeta, setFormMeta] = useState<FormMeta | null>(null);
     const [formFields, setFormFields] = useState<FormField[]>([]);
     const [formResponse, setFormResponse] = useState<FormResponse | null>(null);
     const [answers, setAnswers] = useState<Record<string, string>>({});
     const [isCouple, setIsCouple] = useState(false);
     const [coupleAnswers, setCoupleAnswers] = useState<Record<string, { ele: string; ela: string }>>({});
     const [ticket, setTicket] = useState<any>(null);
+    const [currentStep, setCurrentStep] = useState(0);
+    const [animDir, setAnimDir] = useState<'forward' | 'back'>('forward');
+    const [animKey, setAnimKey] = useState(0);
+
+    // Split fields into steps by section_header dividers
+    const steps = useMemo<Step[]>(() => {
+        if (formFields.length === 0) return [];
+
+        const result: Step[] = [];
+        let current: Step | null = null;
+
+        for (const field of formFields) {
+            if (field.type === 'section_header') {
+                if (current && current.fields.length > 0) result.push(current);
+                current = { title: field.label, fields: [] };
+            } else {
+                if (!current) {
+                    current = { title: formMeta?.name || 'Formulário', fields: [] };
+                }
+                current.fields.push(field);
+            }
+        }
+        if (current && current.fields.length > 0) result.push(current);
+
+        return result.length > 0 ? result : [{ title: formMeta?.name || 'Formulário', fields: formFields }];
+    }, [formFields, formMeta]);
 
     useEffect(() => {
-        async function loadFormData() {
-            if (!ticket_id) {
-                setError('ID do ticket inválido');
-                setLoading(false);
-                return;
-            }
-
+        async function load() {
+            if (!ticket_id) { setError('ID do ticket inválido'); setLoading(false); return; }
             try {
-                // Load ticket
-                const { data: ticketData, error: ticketError } = await supabase
-                    .from('tickets')
-                    .select('*')
-                    .eq('id', ticket_id)
-                    .maybeSingle();
-
-                if (ticketError || !ticketData) {
-                    setError('Ticket não encontrado');
-                    setLoading(false);
-                    return;
-                }
-
+                const { data: ticketData } = await supabase.from('tickets').select('*').eq('id', ticket_id).maybeSingle();
+                if (!ticketData) { setError('Ticket não encontrado'); setLoading(false); return; }
                 setTicket(ticketData);
 
-                // Load form response
-                const { data: responseData, error: responseError } = await supabase
-                    .from('form_responses')
-                    .select('*')
-                    .eq('ticket_id', ticket_id)
-                    .maybeSingle();
-
-                if (responseError || !responseData) {
-                    setError('Formulário não encontrado para este ticket');
-                    setLoading(false);
-                    return;
-                }
-
+                const { data: responseData } = await supabase.from('form_responses').select('*').eq('ticket_id', ticket_id).maybeSingle();
+                if (!responseData) { setError('Formulário não encontrado para este ticket'); setLoading(false); return; }
                 setFormResponse(responseData);
 
-                // Load form
-                const { data: form, error: formError } = await supabase
-                    .from('forms')
-                    .select('*')
-                    .eq('id', responseData.form_id)
-                    .maybeSingle();
+                const { data: form } = await supabase.from('forms').select('*').eq('id', responseData.form_id).maybeSingle();
+                if (!form) { setError('Formulário não encontrado'); setLoading(false); return; }
 
-                if (formError || !form) {
-                    setError('Formulário não encontrado');
-                    setLoading(false);
-                    return;
-                }
-
-                setFormData({
-                    id: form.id,
-                    name: form.name,
-                    description: form.description,
-                    isCouple: form.is_couple || false,
-                });
+                setFormMeta({ id: form.id, name: form.name, description: form.description, isCouple: form.is_couple || false, hasTentNotice: form.has_tent_notice || false });
                 setIsCouple(form.is_couple || false);
 
-                // Load form fields
-                const { data: fields, error: fieldsError } = await supabase
-                    .from('form_fields')
-                    .select('*')
-                    .eq('form_id', form.id)
-                    .order('order_index', { ascending: true });
-
-                if (fieldsError) {
-                    console.error('Error loading form fields:', fieldsError);
-                    setError('Erro ao carregar campos do formulário');
-                    setLoading(false);
-                    return;
-                }
-
+                const { data: fields } = await supabase.from('form_fields').select('*').eq('form_id', form.id).order('order_index', { ascending: true });
                 setFormFields(fields || []);
 
-                // Load existing answers
-                const { data: existingAnswers, error: answersError } = await supabase
-                    .from('form_response_answers')
-                    .select('*')
-                    .eq('response_id', responseData.id);
-
-                if (!answersError && existingAnswers) {
-                    const answersMap: Record<string, string> = {};
-                    const coupleMap: Record<string, { ele: string; ela: string }> = {};
-                    existingAnswers.forEach(answer => {
+                const { data: existingAnswers } = await supabase.from('form_response_answers').select('*').eq('response_id', responseData.id);
+                if (existingAnswers) {
+                    const aMap: Record<string, string> = {};
+                    const cMap: Record<string, { ele: string; ela: string }> = {};
+                    existingAnswers.forEach(a => {
                         if (form.is_couple) {
                             try {
-                                const parsed = JSON.parse(answer.value || '');
-                                if (parsed && typeof parsed === 'object' && 'ele' in parsed) {
-                                    coupleMap[answer.field_id] = parsed;
-                                    return;
-                                }
+                                const p = JSON.parse(a.value || '');
+                                if (p && typeof p === 'object' && 'ele' in p) { cMap[a.field_id] = p; return; }
                             } catch {}
                         }
-                        answersMap[answer.field_id] = answer.value || '';
+                        aMap[a.field_id] = a.value || '';
                     });
-                    setAnswers(answersMap);
-                    if (form.is_couple) setCoupleAnswers(coupleMap);
+                    setAnswers(aMap);
+                    if (form.is_couple) setCoupleAnswers(cMap);
                 }
             } catch (err: any) {
-                console.error('Error loading form data:', err);
                 setError(err.message || 'Erro ao carregar formulário');
             } finally {
                 setLoading(false);
             }
         }
-
-        loadFormData();
+        load();
     }, [ticket_id]);
 
-    const handleFieldChange = (fieldId: string, value: string) => {
-        setAnswers(prev => ({
-            ...prev,
-            [fieldId]: value
-        }));
-    };
+    const handleFieldChange = (fieldId: string, value: string) =>
+        setAnswers(prev => ({ ...prev, [fieldId]: value }));
 
     const formatPhone = (value: string) => {
-        const numbers = value.replace(/\D/g, '');
-        if (numbers.length <= 10) {
-            return numbers
-                .replace(/(\d{2})(\d)/, '($1) $2')
-                .replace(/(\d{4})(\d)/, '$1-$2');
-        } else {
-            return numbers
-                .replace(/(\d{2})(\d)/, '($1) $2')
-                .replace(/(\d{5})(\d)/, '$1-$2')
-                .substring(0, 15);
-        }
+        const n = value.replace(/\D/g, '');
+        if (n.length <= 10) return n.replace(/(\d{2})(\d)/, '($1) $2').replace(/(\d{4})(\d)/, '$1-$2');
+        return n.replace(/(\d{2})(\d)/, '($1) $2').replace(/(\d{5})(\d)/, '$1-$2').substring(0, 15);
     };
 
-    const handlePhoneChange = (fieldId: string, value: string) => {
-        const formatted = formatPhone(value);
-        handleFieldChange(fieldId, formatted);
-    };
+    const handleCoupleChange = (fieldId: string, person: 'ele' | 'ela', value: string) =>
+        setCoupleAnswers(prev => ({ ...prev, [fieldId]: { ...(prev[fieldId] || { ele: '', ela: '' }), [person]: value } }));
 
-    const handleCoupleFieldChange = (fieldId: string, person: 'ele' | 'ela', value: string) => {
-        setCoupleAnswers(prev => ({
-            ...prev,
-            [fieldId]: { ...(prev[fieldId] || { ele: '', ela: '' }), [person]: value }
-        }));
-    };
-
-    const validateForm = () => {
-        for (const field of formFields) {
-            if (field.required) {
-                if (isCouple) {
-                    const ca = coupleAnswers[field.id];
-                    if (!ca?.ele?.trim() || !ca?.ela?.trim()) {
-                        setError(`O campo "${field.label}" é obrigatório para Ele e Ela`);
-                        return false;
-                    }
-                } else if (!answers[field.id]?.trim()) {
-                    setError(`O campo "${field.label}" é obrigatório`);
+    const validateStep = (idx: number): boolean => {
+        if (idx >= steps.length) return true;
+        for (const field of steps[idx].fields) {
+            if (!field.required) continue;
+            if (field.type === 'clause') {
+                if (answers[field.id] !== 'sim') {
+                    setError(`Você precisa aceitar: "${field.label}"`);
                     return false;
                 }
+                continue;
+            }
+            if (isCouple) {
+                const ca = coupleAnswers[field.id];
+                if (!ca?.ele?.trim() || !ca?.ela?.trim()) {
+                    setError(`"${field.label}" é obrigatório para Ele e Ela`);
+                    return false;
+                }
+            } else if (!answers[field.id]?.trim()) {
+                setError(`"${field.label}" é obrigatório`);
+                return false;
             }
         }
         return true;
     };
 
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
+    const navigate = (dir: 'forward' | 'back') => {
         setError(null);
+        if (dir === 'forward' && !validateStep(currentStep)) return;
+        setAnimDir(dir);
+        setAnimKey(k => k + 1);
+        setCurrentStep(s => dir === 'forward' ? Math.min(s + 1, steps.length - 1) : Math.max(s - 1, 0));
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
 
-        if (!validateForm()) {
-            return;
-        }
-
-        if (!formResponse) {
-            setError('Resposta do formulário não encontrada');
-            return;
-        }
-
+    const handleSubmit = async () => {
+        setError(null);
+        if (!validateStep(currentStep)) return;
+        if (!formResponse) return;
         setSubmitting(true);
-
         try {
-            // Update or insert answers
-            const answerUpdates = formFields.map(field => ({
-                response_id: formResponse.id,
-                field_id: field.id,
-                value: isCouple
-                    ? JSON.stringify(coupleAnswers[field.id] || { ele: '', ela: '' })
-                    : (answers[field.id] || null),
-            }));
+            const updates = formFields
+                .filter(f => f.type !== 'section_header')
+                .map(field => ({
+                    response_id: formResponse.id,
+                    field_id: field.id,
+                    value: isCouple
+                        ? JSON.stringify(coupleAnswers[field.id] || { ele: '', ela: '' })
+                        : (answers[field.id] || null),
+                }));
 
-            // Delete existing answers first
-            await supabase
-                .from('form_response_answers')
-                .delete()
-                .eq('response_id', formResponse.id);
-
-            // Insert new answers
-            const { error: insertError } = await supabase
-                .from('form_response_answers')
-                .insert(answerUpdates);
-
-            if (insertError) {
-                console.error('Error saving answers:', insertError);
-                setError('Erro ao salvar respostas');
-                setSubmitting(false);
-                return;
-            }
-
-            // Update form response status
-            const { error: updateError } = await supabase
-                .from('form_responses')
-                .update({ status: 'completed' })
-                .eq('id', formResponse.id);
-
-            if (updateError) {
-                console.error('Error updating response status:', updateError);
-                setError('Erro ao atualizar status do formulário');
-                setSubmitting(false);
-                return;
-            }
-
+            await supabase.from('form_response_answers').delete().eq('response_id', formResponse.id);
+            const { error: insertErr } = await supabase.from('form_response_answers').insert(updates);
+            if (insertErr) { setError('Erro ao salvar respostas'); setSubmitting(false); return; }
+            await supabase.from('form_responses').update({ status: 'completed' }).eq('id', formResponse.id);
             setSubmitted(true);
             window.scrollTo({ top: 0, behavior: 'smooth' });
         } catch (err: any) {
-            console.error('Error submitting form:', err);
             setError(err.message || 'Erro ao enviar formulário');
         } finally {
             setSubmitting(false);
         }
     };
 
-    const renderFieldInput = (field: FormField, value: string, onChange: (val: string) => void) => {
+    const renderInput = (field: FormField, value: string, onChange: (v: string) => void, nameSuffix = '') => {
         switch (field.type) {
             case 'text':
             case 'email':
             case 'number':
-                return (
-                    <input
-                        type={field.type}
-                        value={value}
-                        onChange={(e) => onChange(e.target.value)}
-                        className={styles.input}
-                        placeholder={field.label}
-                    />
-                );
+                return <input type={field.type} value={value} onChange={e => onChange(e.target.value)} className={styles.input} placeholder={field.label} />;
             case 'tel':
-                return (
-                    <input
-                        type="tel"
-                        value={value}
-                        onChange={(e) => onChange(formatPhone(e.target.value))}
-                        className={styles.input}
-                        placeholder="(00) 00000-0000"
-                        maxLength={15}
-                    />
-                );
+                return <input type="tel" value={value} onChange={e => onChange(formatPhone(e.target.value))} className={styles.input} placeholder="(00) 00000-0000" maxLength={15} />;
             case 'date':
-                return (
-                    <input
-                        type="date"
-                        value={value}
-                        onChange={(e) => onChange(e.target.value)}
-                        className={styles.input}
-                    />
-                );
+                return <input type="date" value={value} onChange={e => onChange(e.target.value)} className={styles.input} />;
             case 'textarea':
-                return (
-                    <textarea
-                        value={value}
-                        onChange={(e) => onChange(e.target.value)}
-                        className={styles.textarea}
-                        placeholder={field.label}
-                        rows={isCouple ? 3 : 4}
-                    />
-                );
+                return <textarea value={value} onChange={e => onChange(e.target.value)} className={styles.textarea} placeholder={field.label} rows={3} />;
             case 'select': {
                 const opts = (field.options as any) || [];
                 return (
-                    <select
-                        value={value}
-                        onChange={(e) => onChange(e.target.value)}
-                        className={styles.select}
-                    >
-                        <option value="">Selecione</option>
-                        {opts.map((opt: string, i: number) => (
-                            <option key={i} value={opt}>{opt}</option>
-                        ))}
+                    <select value={value} onChange={e => onChange(e.target.value)} className={styles.select}>
+                        <option value="">Selecione...</option>
+                        {opts.map((o: string, i: number) => <option key={i} value={o}>{o}</option>)}
                     </select>
                 );
             }
             case 'radio': {
-                const radioOpts = (field.options as any) || [];
+                const opts = (field.options as any) || [];
                 return (
-                    <div className={styles.radioGroup}>
-                        {radioOpts.map((opt: string, i: number) => (
-                            <label key={i} className={styles.radioOption}>
-                                <input
-                                    type="radio"
-                                    name={`field-${field.id}-${value.slice(0, 3)}`}
-                                    value={opt}
-                                    checked={value === opt}
-                                    onChange={(e) => onChange(e.target.value)}
-                                />
-                                <span>{opt}</span>
-                            </label>
+                    <div className={styles.pillGroup}>
+                        {opts.map((o: string, i: number) => (
+                            <button
+                                key={i}
+                                type="button"
+                                className={`${styles.pill} ${value === o ? styles.pillActive : ''}`}
+                                onClick={() => onChange(o)}
+                            >
+                                {o}
+                            </button>
                         ))}
                     </div>
                 );
             }
-            case 'checkbox':
+            case 'checkbox': {
+                const checked = value === 'sim' || value === 'true';
                 return (
-                    <label className={styles.checkboxOption}>
-                        <input
-                            type="checkbox"
-                            checked={value === 'true' || value === 'sim' || value === 'yes'}
-                            onChange={(e) => onChange(e.target.checked ? 'sim' : 'não')}
-                        />
-                        <span>{field.label}</span>
-                    </label>
+                    <div className={styles.pillGroup}>
+                        <button type="button" className={`${styles.pill} ${checked ? styles.pillActive : ''}`} onClick={() => onChange('sim')}>Sim</button>
+                        <button type="button" className={`${styles.pill} ${!checked && value ? styles.pillActive : ''}`} onClick={() => onChange('não')}>Não</button>
+                    </div>
                 );
+            }
+            case 'shirt_size': {
+                const sizes = ['PP', 'P', 'M', 'G', 'GG', 'XG', 'XXG'];
+                return (
+                    <div className={styles.sizeGrid}>
+                        {sizes.map(s => (
+                            <button
+                                key={s}
+                                type="button"
+                                className={`${styles.sizeBtn} ${value === s ? styles.sizeBtnActive : ''}`}
+                                onClick={() => onChange(s)}
+                            >
+                                {s}
+                            </button>
+                        ))}
+                    </div>
+                );
+            }
+            case 'clause': {
+                const clauseText = (field.options as any)?.[0] || '';
+                const accepted = value === 'sim';
+                return (
+                    <div className={styles.clauseBox}>
+                        {clauseText && <p className={styles.clauseText}>{clauseText}</p>}
+                        <label className={`${styles.clauseAccept} ${accepted ? styles.clauseAccepted : ''}`}>
+                            <input
+                                type="checkbox"
+                                checked={accepted}
+                                onChange={e => onChange(e.target.checked ? 'sim' : '')}
+                            />
+                            <span>Li e aceito os termos acima</span>
+                        </label>
+                    </div>
+                );
+            }
             default:
-                return (
-                    <input
-                        type="text"
-                        value={value}
-                        onChange={(e) => onChange(e.target.value)}
-                        className={styles.input}
-                        placeholder={field.label}
-                    />
-                );
+                return <input type="text" value={value} onChange={e => onChange(e.target.value)} className={styles.input} placeholder={field.label} />;
         }
     };
 
-    const renderField = (field: FormField) => {
-        return renderFieldInput(field, answers[field.id] || '', (val) => handleFieldChange(field.id, val));
-    };
+    const renderField = (field: FormField) => (
+        <div key={field.id} className={styles.fieldGroup}>
+            <label className={styles.fieldLabel}>
+                {field.label}
+                {field.required && <span className={styles.required}>*</span>}
+            </label>
+            {renderInput(field, answers[field.id] || '', v => handleFieldChange(field.id, v))}
+        </div>
+    );
 
     const renderCoupleField = (field: FormField) => {
-        const coupleVal = coupleAnswers[field.id] || { ele: '', ela: '' };
+        const cv = coupleAnswers[field.id] || { ele: '', ela: '' };
         return (
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
-                <div>
-                    <div style={{ fontSize: '11px', fontWeight: 600, color: '#6b7280', marginBottom: '4px' }}>Ele</div>
-                    {renderFieldInput(field, coupleVal.ele, (val) => handleCoupleFieldChange(field.id, 'ele', val))}
-                </div>
-                <div>
-                    <div style={{ fontSize: '11px', fontWeight: 600, color: '#6b7280', marginBottom: '4px' }}>Ela</div>
-                    {renderFieldInput(field, coupleVal.ela, (val) => handleCoupleFieldChange(field.id, 'ela', val))}
+            <div key={field.id} className={styles.fieldGroup}>
+                <label className={styles.fieldLabel}>
+                    {field.label}
+                    {field.required && <span className={styles.required}>*</span>}
+                </label>
+                <div className={styles.coupleRow}>
+                    <div className={styles.coupleCol}>
+                        <div className={styles.personBadge} data-person="ela">ELA</div>
+                        {renderInput(field, cv.ela, v => handleCoupleChange(field.id, 'ela', v), '-ela')}
+                    </div>
+                    <div className={styles.coupleCol}>
+                        <div className={styles.personBadge} data-person="ele">ELE</div>
+                        {renderInput(field, cv.ele, v => handleCoupleChange(field.id, 'ele', v), '-ele')}
+                    </div>
                 </div>
             </div>
         );
     };
 
+    // ─── Loading ───
     if (loading) {
         return (
-            <main className={styles.main}>
-                <Header />
-                <div className={styles.loadingContainer}>
-                    <div className={styles.spinner}></div>
-                    <p>Carregando formulário...</p>
-                </div>
-                <Footer />
-            </main>
-        );
-    }
-
-    if (error && !formData) {
-        return (
-            <main className={styles.main}>
-                <Header />
-                <div className={styles.errorContainer}>
-                    <h2>Erro</h2>
-                    <p>{error}</p>
-                    <button onClick={() => router.push('/')} className={styles.backButton}>
-                        Voltar ao início
-                    </button>
-                </div>
-                <Footer />
-            </main>
-        );
-    }
-
-    if (submitted) {
-        return (
-            <main className={styles.main}>
-                <Header />
-                <div className={styles.container}>
-                    <div className={styles.formCard} style={{ textAlign: 'center', padding: '3rem 2rem' }}>
-                        <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2" style={{ margin: '0 auto 1.5rem' }}>
-                            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
-                            <polyline points="22 4 12 14.01 9 11.01"/>
-                        </svg>
-                        <h1 style={{ fontSize: '22px', fontWeight: 700, color: '#111827', marginBottom: '0.5rem' }}>
-                            Formulário enviado!
-                        </h1>
-                        <p style={{ color: '#6b7280', fontSize: '14px', marginBottom: '2rem' }}>
-                            Suas respostas foram salvas com sucesso.
-                        </p>
-                        <button onClick={() => router.push('/')} className={styles.submitButton}>
-                            Voltar ao início
-                        </button>
-                    </div>
-                </div>
-                <Footer />
-            </main>
-        );
-    }
-
-    return (
-        <main className={styles.main}>
-            <Header />
-
-            <div className={styles.container}>
-                <div className={styles.formCard}>
-                    {formData && (
-                        <>
-                            <h1 className={styles.title}>{formData.name}</h1>
-                            {formData.description && (
-                                <p className={styles.description}>{formData.description}</p>
-                            )}
-                        </>
-                    )}
-
-                    {ticket && (
-                        <div className={styles.ticketInfo}>
-                            <p><strong>Ticket:</strong> {ticket.ticket_code}</p>
-                        </div>
-                    )}
-
-                    <form onSubmit={handleSubmit} className={styles.form}>
-                        {error && (
-                            <div className={styles.errorAlert}>
-                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                    <circle cx="12" cy="12" r="10"/>
-                                    <line x1="12" y1="8" x2="12" y2="12"/>
-                                    <line x1="12" y1="16" x2="12.01" y2="16"/>
-                                </svg>
-                                {error}
-                            </div>
-                        )}
-
-                        {isCouple && (
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '1rem' }}>
-                                <div style={{ fontSize: '13px', fontWeight: 600, color: '#374151', textAlign: 'center', padding: '6px', background: '#f3f4f6', borderRadius: '6px', border: '1px solid #e5e7eb' }}>
-                                    Ele
-                                </div>
-                                <div style={{ fontSize: '13px', fontWeight: 600, color: '#374151', textAlign: 'center', padding: '6px', background: '#f3f4f6', borderRadius: '6px', border: '1px solid #e5e7eb' }}>
-                                    Ela
-                                </div>
-                            </div>
-                        )}
-                        {formFields.map((field) => (
-                            <div key={field.id} className={styles.formGroup}>
-                                <label className={styles.label}>
-                                    {field.label}
-                                    {field.required && <span className={styles.required}>*</span>}
-                                </label>
-                                {isCouple ? renderCoupleField(field) : renderField(field)}
-                            </div>
-                        ))}
-
-                        <div className={styles.formActions}>
-                            <button
-                                type="submit"
-                                className={styles.submitButton}
-                                disabled={submitting}
-                            >
-                                {submitting ? 'Enviando...' : 'Enviar Formulário'}
-                            </button>
-                        </div>
-                    </form>
+            <div className={styles.fullScreen}>
+                <div className={styles.loadingBox}>
+                    <div className={styles.spinner} />
+                    <p>Carregando...</p>
                 </div>
             </div>
+        );
+    }
 
-            <Footer />
-        </main>
+    // ─── Error without form ───
+    if (error && !formMeta) {
+        return (
+            <div className={styles.fullScreen}>
+                <div className={styles.errorBox}>
+                    <div className={styles.errorIconSvg}>
+                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="1.5">
+                            <circle cx="12" cy="12" r="10"/>
+                            <line x1="12" y1="8" x2="12" y2="12"/>
+                            <line x1="12" y1="16" x2="12.01" y2="16"/>
+                        </svg>
+                    </div>
+                    <h2>Ops!</h2>
+                    <p>{error}</p>
+                    <button onClick={() => router.push('/')} className={styles.primaryBtn}>Voltar ao início</button>
+                </div>
+            </div>
+        );
+    }
+
+    // ─── Success ───
+    if (submitted) {
+        return (
+            <div className={styles.fullScreen}>
+                <div className={styles.successBox}>
+                    <div className={styles.successIconSvg}>
+                        <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="1.5">
+                            <circle cx="12" cy="12" r="10"/>
+                            <polyline points="9 12 11 14 15 10"/>
+                        </svg>
+                    </div>
+                    <h1>Tudo certo!</h1>
+                    <p>Sua ficha foi enviada com sucesso. Você receberá as informações por e-mail.</p>
+                    <button onClick={() => router.push('/')} className={styles.primaryBtn}>Voltar ao início</button>
+                </div>
+            </div>
+        );
+    }
+
+    const step = steps[currentStep];
+    const isLastStep = currentStep === steps.length - 1;
+    const progress = steps.length > 1 ? ((currentStep + 1) / steps.length) * 100 : 100;
+
+    return (
+        <div className={styles.page}>
+            {/* ─── Top Bar ─── */}
+            <header className={styles.topBar}>
+                <button
+                    className={styles.backArrow}
+                    onClick={() => currentStep === 0 ? router.back() : navigate('back')}
+                    aria-label="Voltar"
+                >
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="15 18 9 12 15 6" />
+                    </svg>
+                </button>
+                <div className={styles.topTitle}>{formMeta?.name}</div>
+                {steps.length > 1 && (
+                    <div className={styles.stepCount}>{currentStep + 1}/{steps.length}</div>
+                )}
+            </header>
+
+            {/* ─── Progress Bar ─── */}
+            {steps.length > 1 && (
+                <div className={styles.progressBar}>
+                    <div className={styles.progressFill} style={{ width: `${progress}%` }} />
+                </div>
+            )}
+
+            {/* ─── Step Dots ─── */}
+            {steps.length > 1 && steps.length <= 12 && (
+                <div className={styles.stepDots}>
+                    {steps.map((_, i) => (
+                        <div
+                            key={i}
+                            className={`${styles.dot} ${i < currentStep ? styles.dotDone : ''} ${i === currentStep ? styles.dotActive : ''}`}
+                        />
+                    ))}
+                </div>
+            )}
+
+            {/* ─── Step Content ─── */}
+            <main className={styles.main}>
+                <div
+                    key={animKey}
+                    className={`${styles.stepCard} ${animDir === 'forward' ? styles.slideIn : styles.slideInBack}`}
+                >
+                    {/* Step Header */}
+                    <div className={styles.stepHeader}>
+                        <h2 className={styles.stepTitle}>{step?.title}</h2>
+                    </div>
+
+                    {/* Tent notice — shown only on first step */}
+                    {formMeta?.hasTentNotice && currentStep === 0 && (
+                        <div className={styles.tentNotice}>
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                                <path d="M12 2L2 19h20L12 2z"/>
+                                <line x1="12" y1="9" x2="12" y2="13"/>
+                                <line x1="12" y1="17" x2="12.01" y2="17"/>
+                            </svg>
+                            <span>Trazer sua própria barraca</span>
+                        </div>
+                    )}
+
+                    {/* Couple column labels */}
+                    {isCouple && (
+                        <div className={styles.coupleHeaders}>
+                            <div className={styles.coupleHeaderEla}>Ela</div>
+                            <div className={styles.coupleHeaderEle}>Ele</div>
+                        </div>
+                    )}
+
+                    {/* Fields */}
+                    <div className={styles.fields}>
+                        {step?.fields.map(field =>
+                            isCouple ? renderCoupleField(field) : renderField(field)
+                        )}
+                    </div>
+
+                    {/* Error */}
+                    {error && (
+                        <div className={styles.errorAlert}>
+                            <span>⚠️</span> {error}
+                        </div>
+                    )}
+                </div>
+            </main>
+
+            {/* ─── Bottom Nav ─── */}
+            <footer className={styles.bottomNav}>
+                {currentStep > 0 ? (
+                    <button className={styles.backBtn} onClick={() => navigate('back')}>
+                        Voltar
+                    </button>
+                ) : (
+                    <div />
+                )}
+
+                {isLastStep ? (
+                    <button
+                        className={styles.primaryBtn}
+                        onClick={handleSubmit}
+                        disabled={submitting}
+                    >
+                        {submitting ? (
+                            <span className={styles.btnSpinner} />
+                        ) : (
+                            'Enviar Ficha'
+                        )}
+                    </button>
+                ) : (
+                    <button className={styles.primaryBtn} onClick={() => navigate('forward')}>
+                        Continuar
+                    </button>
+                )}
+            </footer>
+        </div>
     );
 }
-
-

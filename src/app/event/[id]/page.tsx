@@ -18,6 +18,7 @@ interface TicketType {
     id: string;
     name: string;
     price: number;
+    priceCard: number | null;
     quantityAvailable: number;
     quantitySold: number;
     isActive: boolean;
@@ -157,6 +158,7 @@ export default function EventDetails({ params }: { params: Promise<{ id: string 
     const [event, setEvent] = useState<any>(null);
     const [ticketGroups, setTicketGroups] = useState<TicketGroup[]>([]);
     const [ticketQuantities, setTicketQuantities] = useState<Record<string, number>>({});
+    const [reservedCounts, setReservedCounts] = useState<Record<string, number>>({});
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [isPlaceholder, setIsPlaceholder] = useState(false);
@@ -237,6 +239,7 @@ export default function EventDetails({ params }: { params: Promise<{ id: string 
                                     id: type.id,
                                     name: type.name,
                                     price: parseFloat(type.price?.toString() || '0'),
+                                    priceCard: type.price_card ? parseFloat(type.price_card.toString()) : null,
                                     quantityAvailable: type.quantity_available || 0,
                                     quantitySold: type.quantity_sold || 0,
                                     isActive: type.is_active || false,
@@ -248,6 +251,16 @@ export default function EventDetails({ params }: { params: Promise<{ id: string 
                     );
 
                     setTicketGroups(groupsWithTypes);
+
+                    // Fetch active reservation counts so availability is accurate
+                    const { data: reservations } = await supabase
+                        .rpc('get_reserved_counts', { p_event_id: eventId });
+                    if (reservations) {
+                        const counts: Record<string, number> = {};
+                        (reservations as { ticket_type_id: string; reserved_count: number }[])
+                            .forEach(r => { counts[r.ticket_type_id] = r.reserved_count; });
+                        setReservedCounts(counts);
+                    }
                 }
             } catch (err: any) {
                 console.error('Error fetching event data:', err);
@@ -353,7 +366,9 @@ export default function EventDetails({ params }: { params: Promise<{ id: string 
             total: getTotalPrice()
         };
         
-        // Store in sessionStorage and redirect to checkout
+        // Generate fresh session ID for this checkout attempt
+        const sessionId = crypto.randomUUID();
+        sessionStorage.setItem('reservationSessionId', sessionId);
         sessionStorage.setItem('checkoutData', JSON.stringify(checkoutData));
         window.location.href = `/checkout?event=${eventId}`;
     };
@@ -393,10 +408,10 @@ export default function EventDetails({ params }: { params: Promise<{ id: string 
             <section className={styles.heroSection}>
                 <div 
                     className={styles.heroImage}
-                    style={{ 
-                        backgroundImage: event.image_url 
-                            ? `url(${event.image_url})` 
-                            : 'url(https://images.unsplash.com/photo-1470225620780-dba8ba36b745?q=80&w=2070&auto=format&fit=crop)' 
+                    style={{
+                        backgroundImage: event.image_url
+                            ? `url(${event.image_url})`
+                            : 'url(https://images.unsplash.com/photo-1470225620780-dba8ba36b745?q=80&w=800&auto=format&fit=crop)'
                     }}
                 />
                 <div className={styles.heroOverlay} />
@@ -532,7 +547,12 @@ export default function EventDetails({ params }: { params: Promise<{ id: string 
                                 <p className={styles.ticketSubtitle}>Selecione os ingressos desejados</p>
                             </div>
 
-                            {ticketGroups.length > 0 && ticketGroups.every(g => g.ticketTypes.every(t => !t.isActive || t.quantityAvailable <= t.quantitySold)) && event.allow_waitlist ? (
+                            {ticketGroups.length > 0 && ticketGroups.every(g =>
+                                g.ticketTypes.every(t => {
+                                    const reserved = reservedCounts[t.id] || 0;
+                                    return !t.isActive || (t.quantityAvailable - t.quantitySold - reserved) <= 0;
+                                })
+                            ) && event.allow_waitlist ? (
                                 <WaitlistForm
                                     eventId={eventId}
                                     organizationId={event.organization_id}
@@ -552,12 +572,12 @@ export default function EventDetails({ params }: { params: Promise<{ id: string 
                                                 
                                                 <div className={styles.ticketTypesList}>
                                                     {group.ticketTypes.map((type) => {
-                                                        const isAvailable = type.isActive && 
-                                                            type.quantityAvailable > type.quantitySold &&
+                                                        const reserved = reservedCounts[type.id] || 0;
+                                                        const maxAvailable = Math.max(0, type.quantityAvailable - type.quantitySold - reserved);
+                                                        const isAvailable = type.isActive &&
+                                                            maxAvailable > 0 &&
                                                             (!type.startSale || new Date(type.startSale) <= new Date()) &&
                                                             (!type.endSale || new Date(type.endSale) >= new Date());
-                                                        
-                                                        const maxAvailable = type.quantityAvailable - type.quantitySold;
                                                         const currentQuantity = ticketQuantities[type.id] || 0;
                                                         
                                                         return (
@@ -577,7 +597,17 @@ export default function EventDetails({ params }: { params: Promise<{ id: string 
                                                                         )}
                                                                     </div>
                                                                     <div className={styles.ticketTypePrice}>
-                                                                        {formatPrice(type.price)}
+                                                                        {type.priceCard && type.priceCard !== type.price ? (
+                                                                            <>
+                                                                                <span style={{ fontSize: '0.75rem', color: '#6b7280' }}>PIX </span>
+                                                                                {formatPrice(type.price)}
+                                                                                <span style={{ fontSize: '0.75rem', color: '#6b7280', marginLeft: '0.5rem' }}>
+                                                                                    | Cartão {formatPrice(type.priceCard)}
+                                                                                </span>
+                                                                            </>
+                                                                        ) : (
+                                                                            formatPrice(type.price)
+                                                                        )}
                                                                     </div>
                                                                 </div>
                                                                 
