@@ -31,216 +31,270 @@ interface PdfPayload {
     orgLogoBase64?: string | null;
 }
 
-// ── Color palette ──────────────────────────────────────────────────────────
-const C = {
-    dark:     [17,  24,  39]  as [number,number,number],
-    gray500:  [107, 114, 128] as [number,number,number],
-    gray200:  [229, 231, 235] as [number,number,number],
-    gray100:  [243, 244, 246] as [number,number,number],
-    white:    [255, 255, 255] as [number,number,number],
-    elaText:  [162,  28, 175] as [number,number,number], // fuchsia-700
-    elaBg:    [253, 242, 248] as [number,number,number], // fuchsia-50
-    elaBorder:[240, 171, 252] as [number,number,number], // fuchsia-300
-    eleText:  [ 29,  78, 216] as [number,number,number], // blue-700
-    eleBg:    [239, 246, 255] as [number,number,number], // blue-50
-    eleBorder:[191, 219, 254] as [number,number,number], // blue-200
-    sectionBg:[30,  41,  59]  as [number,number,number], // slate-800
-    amber:    [180, 83,   9]  as [number,number,number],
+type RGB = [number, number, number];
+
+// ── Design tokens ──────────────────────────────────────────────────────────
+const T = {
+    // Colors
+    headerBg:   [15,  23,  42] as RGB,   // slate-900
+    sectionBg:  [30,  41,  59] as RGB,   // slate-800
+    dark:       [15,  23,  42] as RGB,   // text primary
+    muted:      [100, 116, 139] as RGB,  // slate-500
+    separator:  [226, 232, 240] as RGB,  // slate-200
+    white:      [255, 255, 255] as RGB,
+    elaBg:      [253, 242, 248] as RGB,  // fuchsia-50
+    elaBorder:  [240, 171, 252] as RGB,  // fuchsia-300
+    elaText:    [162,  28, 175] as RGB,  // fuchsia-700
+    eleBg:      [239, 246, 255] as RGB,  // blue-50
+    eleBorder:  [191, 219, 254] as RGB,  // blue-200
+    eleText:    [ 29,  78, 216] as RGB,  // blue-700
+    amber:      [180,  83,   9] as RGB,
+
+    // Typography (pt)
+    headingSize:  18,
+    subheadSize:  11,
+    metaLabelSz:   7.5,
+    metaValueSz:   11,
+    sectionLabelSz: 8,
+    fieldLabelSz:   7,
+    fieldValueSz:  10,
+    badgeSz:        6.5,
+
+    // Spacing (mm)
+    marginX:   14,
+    marginTop: 16,
+    sectionH:   9,    // section header bar height
+    fieldLabelH: 4,   // height of field label line
+    badgeH:      5,   // badge pill height
+    lineH:       4.8, // text line height
+    fieldGap:    8,   // vertical space after each field (incl separator)
+    sectionGap:  4,   // space after section header before first field
 };
 
+// ── Helpers ────────────────────────────────────────────────────────────────
+function parseCouple(raw: string): { ela: string; ele: string } | null {
+    if (!raw.startsWith('{')) return null;
+    try {
+        const p = JSON.parse(raw);
+        if (p && typeof p === 'object' && ('ela' in p || 'ele' in p)) {
+            return { ela: String(p.ela ?? ''), ele: String(p.ele ?? '') };
+        }
+    } catch { /* */ }
+    return null;
+}
+
+function richness(v: string): number {
+    const c = parseCouple(v);
+    if (c) return (c.ela || c.ele) ? 3 : 1;
+    return v.trim() ? 2 : 0;
+}
+
+function normalizeLabel(label: string): string {
+    return label.replace(/\s*\((ela|ele|homem|mulher)\)\s*$/i, '').trim();
+}
+
+// ── PDF Builder ────────────────────────────────────────────────────────────
 function buildPDF(payload: PdfPayload): string {
     const { participantName, participantEmail, participantPhone,
             eventName, tickets, formDetails, orgLogoBase64 } = payload;
 
-    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-    const PW = 210;
-    const M  = 14;   // left/right margin
-    const CW = PW - M * 2;   // 182mm content width
+    const doc  = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+    const PW   = 210;
+    const M    = T.marginX;
+    const CW   = PW - M * 2;           // 182 mm
+    const COL  = (CW - 5) / 2;         // ~88.5 mm per couple column
+    const CGAP = 5;
 
-    // ── Header ──────────────────────────────────────────────────────────────
-    doc.setFillColor(...C.dark);
-    doc.rect(0, 0, PW, 28, 'F');
+    let y = 0;
+
+    // ── Page guard ──────────────────────────────────────────────────────────
+    function ensureSpace(needed: number) {
+        if (y + needed > 282) { doc.addPage(); y = T.marginTop; }
+    }
+
+    // ── Badge pill ──────────────────────────────────────────────────────────
+    function badge(x: number, yy: number, who: 'ela' | 'ele') {
+        const lbl    = who === 'ela' ? 'ELA' : 'ELE';
+        const bg     = who === 'ela' ? T.elaBg    : T.eleBg;
+        const border = who === 'ela' ? T.elaBorder: T.eleBorder;
+        const color  = who === 'ela' ? T.elaText  : T.eleText;
+        const w = 14, h = T.badgeH;
+        doc.setFillColor(...bg);
+        doc.setDrawColor(...border);
+        doc.setLineWidth(0.25);
+        doc.roundedRect(x, yy, w, h, 1.5, 1.5, 'FD');
+        doc.setTextColor(...color);
+        doc.setFontSize(T.badgeSz);
+        doc.setFont('helvetica', 'bold');
+        doc.text(lbl, x + w / 2, yy + 3.5, { align: 'center' });
+    }
+
+    // ── Section header ──────────────────────────────────────────────────────
+    function sectionHeader(title: string) {
+        ensureSpace(T.sectionH + T.sectionGap + 14);
+        doc.setFillColor(...T.sectionBg);
+        doc.rect(M, y, CW, T.sectionH, 'F');
+        doc.setTextColor(...T.white);
+        doc.setFontSize(T.sectionLabelSz);
+        doc.setFont('helvetica', 'bold');
+        doc.text(title.toUpperCase(), M + 5, y + 6);
+        y += T.sectionH + T.sectionGap;
+    }
+
+    // ── Single field ────────────────────────────────────────────────────────
+    function singleField(label: string, value: string) {
+        const lines = doc.splitTextToSize(value, CW);
+        const needed = T.fieldLabelH + 1 + lines.length * T.lineH + T.fieldGap;
+        ensureSpace(needed);
+
+        // Label
+        doc.setTextColor(...T.muted);
+        doc.setFontSize(T.fieldLabelSz);
+        doc.setFont('helvetica', 'bold');
+        doc.text(label.toUpperCase(), M, y);
+        y += T.fieldLabelH + 1;
+
+        // Value
+        doc.setTextColor(...T.dark);
+        doc.setFontSize(T.fieldValueSz);
+        doc.setFont('helvetica', 'normal');
+        doc.text(lines, M, y);
+        y += lines.length * T.lineH + 3;
+
+        // Separator
+        doc.setDrawColor(...T.separator);
+        doc.setLineWidth(0.2);
+        doc.line(M, y, PW - M, y);
+        y += 5;
+    }
+
+    // ── Couple field ────────────────────────────────────────────────────────
+    function coupleField(label: string, elaVal: string, eleVal: string) {
+        const elaLines = doc.splitTextToSize(elaVal || '—', COL - 2);
+        const eleLines = doc.splitTextToSize(eleVal || '—', COL - 2);
+        const maxLines = Math.max(elaLines.length, eleLines.length);
+        const needed = T.fieldLabelH + 1 + T.badgeH + 3 + maxLines * T.lineH + T.fieldGap;
+        ensureSpace(needed);
+
+        // Field label (full width)
+        doc.setTextColor(...T.muted);
+        doc.setFontSize(T.fieldLabelSz);
+        doc.setFont('helvetica', 'bold');
+        doc.text(label.toUpperCase(), M, y);
+        y += T.fieldLabelH + 1;
+
+        const xEla = M;
+        const xEle = M + COL + CGAP;
+
+        // Subtle column backgrounds
+        doc.setFillColor(...T.elaBg);
+        doc.setDrawColor(...T.elaBorder);
+        doc.setLineWidth(0.15);
+        doc.roundedRect(xEla, y, COL, T.badgeH + 3 + maxLines * T.lineH + 3, 2, 2, 'FD');
+
+        doc.setFillColor(...T.eleBg);
+        doc.setDrawColor(...T.eleBorder);
+        doc.roundedRect(xEle, y, COL, T.badgeH + 3 + maxLines * T.lineH + 3, 2, 2, 'FD');
+
+        // Badges inside columns
+        badge(xEla + 3, y + 1.5, 'ela');
+        badge(xEle + 3, y + 1.5, 'ele');
+        y += T.badgeH + 4;
+
+        // Values
+        doc.setTextColor(...T.dark);
+        doc.setFontSize(T.fieldValueSz);
+        doc.setFont('helvetica', 'normal');
+        doc.text(elaLines, xEla + 4, y);
+        doc.text(eleLines, xEle + 4, y);
+        y += maxLines * T.lineH + 5;
+
+        // Separator
+        doc.setDrawColor(...T.separator);
+        doc.setLineWidth(0.2);
+        doc.line(M, y, PW - M, y);
+        y += 5;
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // HEADER
+    // ═══════════════════════════════════════════════════════════════════════
+    doc.setFillColor(...T.headerBg);
+    doc.rect(0, 0, PW, 30, 'F');
 
     if (orgLogoBase64) {
         try { doc.addImage(orgLogoBase64, 'PNG', PW - M - 22, 4, 20, 20, undefined, 'FAST'); }
-        catch { /* skip */ }
+        catch { /* skip bad logo */ }
     }
 
-    doc.setTextColor(...C.white);
+    doc.setTextColor(...T.white);
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(16);
-    doc.text(eventName || 'Evento', M, 13);
-    doc.setFontSize(11);
-    doc.setFont('helvetica', 'normal');
-    doc.text(participantName || 'Participante', M, 22);
+    doc.setFontSize(T.headingSize);
+    doc.text(eventName || 'Evento', M, 14);
 
-    let y = 38;
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(T.subheadSize);
+    doc.setTextColor(148, 163, 184); // slate-400
+    doc.text(participantName || 'Participante', M, 23);
+
+    y = 40;
 
     // ── Contact row ─────────────────────────────────────────────────────────
-    doc.setTextColor(...C.gray500);
-    doc.setFontSize(7.5);
+    // Labels
+    doc.setTextColor(...T.muted);
+    doc.setFontSize(T.metaLabelSz);
     doc.setFont('helvetica', 'bold');
     doc.text('E-MAIL', M, y);
-    doc.text('TELEFONE', M + 95, y);
+    doc.text('TELEFONE', M + 100, y);
     y += 5;
-    doc.setTextColor(...C.dark);
-    doc.setFontSize(10);
+
+    // Values
+    doc.setTextColor(...T.dark);
+    doc.setFontSize(T.metaValueSz);
     doc.setFont('helvetica', 'bold');
-    const emailTxt = (participantEmail || '-').length > 38
-        ? (participantEmail || '-').substring(0, 37) + '…'
-        : (participantEmail || '-');
-    doc.text(emailTxt, M, y);
-    doc.text(participantPhone || '-', M + 95, y);
-    y += 8;
-    doc.setDrawColor(...C.gray200);
+    const emailDisplay = (participantEmail || '—').length > 40
+        ? (participantEmail || '—').substring(0, 39) + '…'
+        : (participantEmail || '—');
+    doc.text(emailDisplay, M, y);
+    doc.text(participantPhone || '—', M + 100, y);
+    y += 9;
+
+    // Separator
+    doc.setDrawColor(...T.separator);
+    doc.setLineWidth(0.4);
     doc.line(M, y, PW - M, y);
-    y += 7;
+    y += 8;
 
-    // ── Form answers ────────────────────────────────────────────────────────
-    const COL_GAP   = 4;
-    const COL_W     = (CW - COL_GAP) / 2;   // ~89mm each column
-    const LABEL_H   = 4.5;
-    const LINE_H    = 5;
-    const ROW_PAD   = 5;
-
-    function checkPage(needed: number) {
-        if (y + needed > 282) { doc.addPage(); y = 16; }
-    }
-
-    function drawSectionHeader(title: string) {
-        checkPage(10);
-        doc.setFillColor(...C.sectionBg);
-        doc.rect(M, y, CW, 8, 'F');
-        doc.setTextColor(...C.white);
-        doc.setFontSize(8);
-        doc.setFont('helvetica', 'bold');
-        doc.text(title.toUpperCase(), M + 4, y + 5.5);
-        y += 11;
-    }
-
-    function drawPersonBadge(x: number, yy: number, person: 'ela' | 'ele') {
-        const label  = person === 'ela' ? 'ELA' : 'ELE';
-        const bg     = person === 'ela' ? C.elaBg    : C.eleBg;
-        const border = person === 'ela' ? C.elaBorder: C.eleBorder;
-        const text   = person === 'ela' ? C.elaText  : C.eleText;
-        doc.setFillColor(...bg);
-        doc.setDrawColor(...border);
-        doc.roundedRect(x, yy - 3.5, 14, 5, 1.5, 1.5, 'FD');
-        doc.setTextColor(...text);
-        doc.setFontSize(6.5);
-        doc.setFont('helvetica', 'bold');
-        doc.text(label, x + 7, yy + 0.2, { align: 'center' });
-    }
-
-    function drawSingleField(label: string, value: string) {
-        const valLines = doc.splitTextToSize(value || '-', CW - 2);
-        const rowH = LABEL_H + valLines.length * LINE_H + ROW_PAD;
-        checkPage(rowH);
-
-        doc.setTextColor(...C.gray500);
-        doc.setFontSize(7.5);
-        doc.setFont('helvetica', 'bold');
-        doc.text(label.toUpperCase(), M, y);
-
-        doc.setTextColor(...C.dark);
-        doc.setFontSize(10);
-        doc.setFont('helvetica', 'bold');
-        doc.text(valLines, M, y + LABEL_H + 1);
-
-        y += rowH;
-        doc.setDrawColor(...C.gray200);
-        doc.line(M, y - ROW_PAD + 1, PW - M, y - ROW_PAD + 1);
-    }
-
-    function drawCoupleField(label: string, elaVal: string, eleVal: string) {
-        const elaLines = doc.splitTextToSize(elaVal || '-', COL_W - 4);
-        const eleLines = doc.splitTextToSize(eleVal || '-', COL_W - 4);
-        const maxLines = Math.max(elaLines.length, eleLines.length);
-        const rowH = 6 + LABEL_H + maxLines * LINE_H + ROW_PAD;
-        checkPage(rowH);
-
-        // Field label spanning full width
-        doc.setTextColor(...C.gray500);
-        doc.setFontSize(7.5);
-        doc.setFont('helvetica', 'bold');
-        doc.text(label.toUpperCase(), M, y);
-        y += LABEL_H + 1;
-
-        const xEla = M;
-        const xEle = M + COL_W + COL_GAP;
-
-        // ELA column
-        drawPersonBadge(xEla, y, 'ela');
-        doc.setTextColor(...C.dark);
-        doc.setFontSize(10);
-        doc.setFont('helvetica', 'bold');
-        doc.text(elaLines, xEla, y + 3);
-
-        // ELE column
-        drawPersonBadge(xEle, y, 'ele');
-        doc.text(eleLines, xEle, y + 3);
-
-        y += maxLines * LINE_H + 5;
-        doc.setDrawColor(...C.gray200);
-        doc.line(M, y, PW - M, y);
-        y += ROW_PAD - 2;
-    }
-
+    // ═══════════════════════════════════════════════════════════════════════
+    // FORM ANSWERS
+    // ═══════════════════════════════════════════════════════════════════════
     for (const ticket of tickets || []) {
         const detail = formDetails[ticket.id];
         if (!detail) continue;
 
         if (detail.status === 'pending') {
-            checkPage(10);
+            ensureSpace(12);
             doc.setFontSize(9);
             doc.setFont('helvetica', 'italic');
-            doc.setTextColor(...C.amber);
+            doc.setTextColor(...T.amber);
             doc.text('Formulário ainda não preenchido', M, y);
-            y += 8;
+            y += 10;
             continue;
         }
 
         if (!detail.answers?.length) continue;
 
-        // Sort by order_index
+        // Sort
         const sorted = [...detail.answers].sort(
             (a, b) => (a.form_fields?.order_index ?? 0) - (b.form_fields?.order_index ?? 0)
         );
 
-        // ── Helpers ───────────────────────────────────────────────────────
-
-        // Parse a raw value: returns { elaVal, eleVal, isJson }
-        function parseVal(raw: string) {
-            if (raw.startsWith('{')) {
-                try {
-                    const p = JSON.parse(raw);
-                    if (p && typeof p === 'object' && ('ela' in p || 'ele' in p)) {
-                        return { elaVal: String(p.ela ?? ''), eleVal: String(p.ele ?? ''), isJson: true };
-                    }
-                } catch { /* */ }
-            }
-            return { elaVal: '', eleVal: '', isJson: false };
-        }
-
-        // Richness score: non-empty JSON with values > plain text > empty JSON > empty
-        function richness(v: string): number {
-            if (!v) return 0;
-            const { elaVal, eleVal, isJson } = parseVal(v);
-            if (isJson) return (elaVal || eleVal) ? 3 : 1; // JSON with values > empty JSON
-            return v.trim() ? 2 : 0;
-        }
-
-        // Normalize legacy label suffixes: (Ela), (Ele), (Homem), (Mulher)
-        function normLabel(label: string) {
-            return label.replace(/\s*\((ela|ele|homem|mulher)\)\s*$/i, '').trim();
-        }
-
-        // ── Deduplicate by normalised label ──────────────────────────────
+        // Deduplicate by normalised label, keep richest value
         const deduped = new Map<string, FormAnswer>();
         for (const ans of sorted) {
-            const label = ans.form_fields?.label;
-            if (!label) continue;
-            const key = normLabel(label);
+            const raw = ans.form_fields?.label;
+            if (!raw) continue;
+            const key = normalizeLabel(raw);
             const existing = deduped.get(key);
             if (!existing || richness(ans.value || '') > richness(existing.value || '')) {
                 deduped.set(key, {
@@ -250,7 +304,6 @@ function buildPDF(payload: PdfPayload): string {
             }
         }
 
-        // ── Render ────────────────────────────────────────────────────────
         for (const ans of deduped.values()) {
             const field = ans.form_fields;
             if (!field?.label) continue;
@@ -261,66 +314,53 @@ function buildPDF(payload: PdfPayload): string {
 
             // Section header
             if (type === 'section_header') {
-                if (y > 16) y += 2;
-                drawSectionHeader(label);
+                if (y > T.marginTop + 10) y += 2;
+                sectionHeader(label);
                 continue;
             }
 
-            // Parse JSON couple values
-            const { elaVal, eleVal, isJson } = parseVal(rawVal);
+            // Parse couple JSON
+            const couple = parseCouple(rawVal);
 
-            // Determine rendering mode
-            // is_couple_field: true → ELA|ELE columns
-            //                  false → single field
-            //                  null/undefined → detect by JSON content
-            const forceCouple = field.is_couple_field === true;
-            const forceSingle = field.is_couple_field === false;
+            if (couple) {
+                const bothEmpty = !couple.ela && !couple.ele;
+                if (bothEmpty) continue; // skip truly empty fields
 
-            let renderAsCouple = false;
-            let displayVal = rawVal;
+                const forceSingle = field.is_couple_field === false;
 
-            if (isJson) {
-                const bothEmpty = !elaVal && !eleVal;
-                if (bothEmpty) {
-                    // Truly empty — skip this field entirely
-                    continue;
-                }
                 if (forceSingle) {
-                    // Single field that stored couple JSON — show smartly
-                    if (elaVal === eleVal) {
-                        // Same value → show once
-                        displayVal = elaVal || eleVal;
-                    } else if (elaVal && eleVal) {
-                        // Different → show "Ela: X  /  Ele: Y"
-                        displayVal = `Ela: ${elaVal}  /  Ele: ${eleVal}`;
+                    // Shared couple field — show smartest single value
+                    let display: string;
+                    if (couple.ela === couple.ele) {
+                        display = couple.ela || couple.ele;
+                    } else if (couple.ela && couple.ele) {
+                        display = `Ela: ${couple.ela}  /  Ele: ${couple.ele}`;
                     } else {
-                        displayVal = elaVal || eleVal;
+                        display = couple.ela || couple.ele;
                     }
-                } else if (forceCouple || (!forceSingle)) {
-                    renderAsCouple = true;
+                    if (display) singleField(label, display);
+                } else {
+                    coupleField(label, couple.ela, couple.ele);
                 }
             } else {
-                // Plain text value
-                if (!rawVal) continue; // skip empty
-            }
-
-            if (renderAsCouple) {
-                drawCoupleField(label, elaVal, eleVal);
-            } else {
-                drawSingleField(label, displayVal || '-');
+                // Plain text
+                if (!rawVal) continue;
+                singleField(label, rawVal);
             }
         }
     }
 
     // ── Footer ──────────────────────────────────────────────────────────────
-    doc.setDrawColor(...C.gray200);
-    doc.line(M, 285, PW - M, 285);
-    doc.setFontSize(7.5);
+    const footerY = 289;
+    doc.setDrawColor(...T.separator);
+    doc.setLineWidth(0.3);
+    doc.line(M, footerY - 4, PW - M, footerY - 4);
+    doc.setFontSize(7);
     doc.setFont('helvetica', 'normal');
-    doc.setTextColor(...C.gray500);
+    doc.setTextColor(...T.muted);
     doc.text(
-        `Gerado via sistema de Ingressos — ${new Date().toLocaleDateString('pt-BR')}`,
-        PW / 2, 290, { align: 'center' }
+        `Gerado em ${new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}`,
+        PW / 2, footerY, { align: 'center' }
     );
 
     return doc.output('datauristring');
