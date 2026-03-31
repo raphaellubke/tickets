@@ -407,18 +407,46 @@
     color: #166534;
 }
 
-/* ─── Error alert ─── */
+/* ─── Error alert (top of card) ─── */
 .errorAlert {
     display: flex;
     align-items: center;
     gap: 0.625rem;
-    padding: 0.875rem 1rem;
+    padding: 0.75rem 1rem;
     background: #fef2f2;
     border: 1px solid #fecaca;
     border-radius: 10px;
     color: #dc2626;
     font-size: 0.875rem;
-    margin-top: 1.25rem;
+    margin-bottom: 1.25rem;
+}
+
+/* ─── Inline field error ─── */
+.fieldGroupError > .input,
+.fieldGroupError > .textarea,
+.fieldGroupError > .select {
+    border-color: #ef4444;
+    background: #fff5f5;
+}
+
+.inputError {
+    border-color: #ef4444 !important;
+    background: #fff5f5 !important;
+    box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1) !important;
+}
+
+.pillGroup.inputError,
+.sizeGrid.inputError {
+    outline: 2px solid #ef4444;
+    outline-offset: 3px;
+    border-radius: 8px;
+}
+
+.fieldErrorMsg {
+    font-size: 0.8rem;
+    color: #ef4444;
+    font-weight: 500;
+    margin-top: 0.125rem;
 }
 
 /* ─── Bottom Nav ─── */

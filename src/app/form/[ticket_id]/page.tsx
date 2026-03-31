@@ -54,17 +54,20 @@ export default function FormResponsePage({ params }: { params: Promise<{ ticket_
     const [currentStep, setCurrentStep] = useState(0);
     const [animDir, setAnimDir] = useState<'forward' | 'back'>('forward');
     const [animKey, setAnimKey] = useState(0);
+    const [fieldErrors, setFieldErrors] = useState<Set<string>>(new Set());
 
-    // Split fields into steps by section_header dividers
+    const MAX_FIELDS_PER_PAGE = 6;
+
+    // Split fields into steps by section_header dividers, then auto-split large steps
     const steps = useMemo<Step[]>(() => {
         if (formFields.length === 0) return [];
 
-        const result: Step[] = [];
+        const sections: Step[] = [];
         let current: Step | null = null;
 
         for (const field of formFields) {
             if (field.type === 'section_header') {
-                if (current && current.fields.length > 0) result.push(current);
+                if (current && current.fields.length > 0) sections.push(current);
                 current = { title: field.label, fields: [] };
             } else {
                 if (!current) {
@@ -73,9 +76,22 @@ export default function FormResponsePage({ params }: { params: Promise<{ ticket_
                 current.fields.push(field);
             }
         }
-        if (current && current.fields.length > 0) result.push(current);
+        if (current && current.fields.length > 0) sections.push(current);
 
-        return result.length > 0 ? result : [{ title: formMeta?.name || 'Formulário', fields: formFields }];
+        const base = sections.length > 0 ? sections : [{ title: formMeta?.name || 'Formulário', fields: formFields }];
+
+        // Auto-split sections with too many fields
+        const result: Step[] = [];
+        for (const section of base) {
+            if (section.fields.length <= MAX_FIELDS_PER_PAGE) {
+                result.push(section);
+            } else {
+                for (let i = 0; i < section.fields.length; i += MAX_FIELDS_PER_PAGE) {
+                    result.push({ title: section.title, fields: section.fields.slice(i, i + MAX_FIELDS_PER_PAGE) });
+                }
+            }
+        }
+        return result;
     }, [formFields, formMeta]);
 
     useEffect(() => {
@@ -124,8 +140,14 @@ export default function FormResponsePage({ params }: { params: Promise<{ ticket_
         load();
     }, [ticket_id]);
 
-    const handleFieldChange = (fieldId: string, value: string) =>
+    const clearFieldError = (fieldId: string) => {
+        if (fieldErrors.has(fieldId)) setFieldErrors(prev => { const n = new Set(prev); n.delete(fieldId); return n; });
+    };
+
+    const handleFieldChange = (fieldId: string, value: string) => {
         setAnswers(prev => ({ ...prev, [fieldId]: value }));
+        clearFieldError(fieldId);
+    };
 
     const formatPhone = (value: string) => {
         const n = value.replace(/\D/g, '');
@@ -133,31 +155,34 @@ export default function FormResponsePage({ params }: { params: Promise<{ ticket_
         return n.replace(/(\d{2})(\d)/, '($1) $2').replace(/(\d{5})(\d)/, '$1-$2').substring(0, 15);
     };
 
-    const handleCoupleChange = (fieldId: string, person: 'ele' | 'ela', value: string) =>
+    const handleCoupleChange = (fieldId: string, person: 'ele' | 'ela', value: string) => {
         setCoupleAnswers(prev => ({ ...prev, [fieldId]: { ...(prev[fieldId] || { ele: '', ela: '' }), [person]: value } }));
+        clearFieldError(fieldId);
+    };
 
     const validateStep = (idx: number): boolean => {
         if (idx >= steps.length) return true;
+        const errors = new Set<string>();
         for (const field of steps[idx].fields) {
             if (!field.required) continue;
             if (field.type === 'clause') {
-                if (answers[field.id] !== 'sim') {
-                    setError(`Você precisa aceitar: "${field.label}"`);
-                    return false;
-                }
+                if (answers[field.id] !== 'sim') errors.add(field.id);
                 continue;
             }
             if (isCouple) {
                 const ca = coupleAnswers[field.id];
-                if (!ca?.ele?.trim() || !ca?.ela?.trim()) {
-                    setError(`"${field.label}" é obrigatório para Ele e Ela`);
-                    return false;
-                }
+                if (!ca?.ele?.trim() || !ca?.ela?.trim()) errors.add(field.id);
             } else if (!answers[field.id]?.trim()) {
-                setError(`"${field.label}" é obrigatório`);
-                return false;
+                errors.add(field.id);
             }
         }
+        if (errors.size > 0) {
+            setFieldErrors(errors);
+            setError('Preencha os campos obrigatórios marcados em vermelho');
+            return false;
+        }
+        setFieldErrors(new Set());
+        setError(null);
         return true;
     };
 
@@ -199,22 +224,23 @@ export default function FormResponsePage({ params }: { params: Promise<{ ticket_
         }
     };
 
-    const renderInput = (field: FormField, value: string, onChange: (v: string) => void, nameSuffix = '') => {
+    const renderInput = (field: FormField, value: string, onChange: (v: string) => void, nameSuffix = '', hasError = false) => {
+        const errClass = hasError ? ` ${styles.inputError}` : '';
         switch (field.type) {
             case 'text':
             case 'email':
             case 'number':
-                return <input type={field.type} value={value} onChange={e => onChange(e.target.value)} className={styles.input} placeholder={field.label} />;
+                return <input type={field.type} value={value} onChange={e => onChange(e.target.value)} className={styles.input + errClass} placeholder={field.label} />;
             case 'tel':
-                return <input type="tel" value={value} onChange={e => onChange(formatPhone(e.target.value))} className={styles.input} placeholder="(00) 00000-0000" maxLength={15} />;
+                return <input type="tel" value={value} onChange={e => onChange(formatPhone(e.target.value))} className={styles.input + errClass} placeholder="(00) 00000-0000" maxLength={15} />;
             case 'date':
-                return <input type="date" value={value} onChange={e => onChange(e.target.value)} className={styles.input} />;
+                return <input type="date" value={value} onChange={e => onChange(e.target.value)} className={styles.input + errClass} />;
             case 'textarea':
-                return <textarea value={value} onChange={e => onChange(e.target.value)} className={styles.textarea} placeholder={field.label} rows={3} />;
+                return <textarea value={value} onChange={e => onChange(e.target.value)} className={styles.textarea + errClass} placeholder={field.label} rows={3} />;
             case 'select': {
                 const opts = (field.options as any) || [];
                 return (
-                    <select value={value} onChange={e => onChange(e.target.value)} className={styles.select}>
+                    <select value={value} onChange={e => onChange(e.target.value)} className={styles.select + errClass}>
                         <option value="">Selecione...</option>
                         {opts.map((o: string, i: number) => <option key={i} value={o}>{o}</option>)}
                     </select>
@@ -223,7 +249,7 @@ export default function FormResponsePage({ params }: { params: Promise<{ ticket_
             case 'radio': {
                 const opts = (field.options as any) || [];
                 return (
-                    <div className={styles.pillGroup}>
+                    <div className={styles.pillGroup + errClass}>
                         {opts.map((o: string, i: number) => (
                             <button
                                 key={i}
@@ -240,16 +266,16 @@ export default function FormResponsePage({ params }: { params: Promise<{ ticket_
             case 'checkbox': {
                 const checked = value === 'sim' || value === 'true';
                 return (
-                    <div className={styles.pillGroup}>
+                    <div className={styles.pillGroup + errClass}>
                         <button type="button" className={`${styles.pill} ${checked ? styles.pillActive : ''}`} onClick={() => onChange('sim')}>Sim</button>
                         <button type="button" className={`${styles.pill} ${!checked && value ? styles.pillActive : ''}`} onClick={() => onChange('não')}>Não</button>
                     </div>
                 );
             }
             case 'shirt_size': {
-                const sizes = ['PP', 'P', 'M', 'G', 'GG', 'XG', 'XXG'];
+                const sizes: string[] = (field.options as any)?.length > 0 ? (field.options as any) : ['PP', 'P', 'M', 'G', 'GG', 'XG', 'XXG'];
                 return (
-                    <div className={styles.sizeGrid}>
+                    <div className={styles.sizeGrid + errClass}>
                         {sizes.map(s => (
                             <button
                                 key={s}
@@ -285,20 +311,27 @@ export default function FormResponsePage({ params }: { params: Promise<{ ticket_
         }
     };
 
-    const renderField = (field: FormField) => (
-        <div key={field.id} className={styles.fieldGroup}>
-            <label className={styles.fieldLabel}>
-                {field.label}
-                {field.required && <span className={styles.required}>*</span>}
-            </label>
-            {renderInput(field, answers[field.id] || '', v => handleFieldChange(field.id, v))}
-        </div>
-    );
+    const renderField = (field: FormField) => {
+        const hasError = fieldErrors.has(field.id);
+        return (
+            <div key={field.id} className={`${styles.fieldGroup} ${hasError ? styles.fieldGroupError : ''}`}>
+                <label className={styles.fieldLabel}>
+                    {field.label}
+                    {field.required && <span className={styles.required}>*</span>}
+                </label>
+                {renderInput(field, answers[field.id] || '', v => handleFieldChange(field.id, v), '', hasError)}
+                {hasError && <span className={styles.fieldErrorMsg}>Campo obrigatório</span>}
+            </div>
+        );
+    };
 
     const renderCoupleField = (field: FormField) => {
         const cv = coupleAnswers[field.id] || { ele: '', ela: '' };
+        const hasError = fieldErrors.has(field.id);
+        const elaEmpty = hasError && !cv.ela?.trim();
+        const eleEmpty = hasError && !cv.ele?.trim();
         return (
-            <div key={field.id} className={styles.fieldGroup}>
+            <div key={field.id} className={`${styles.fieldGroup} ${hasError ? styles.fieldGroupError : ''}`}>
                 <label className={styles.fieldLabel}>
                     {field.label}
                     {field.required && <span className={styles.required}>*</span>}
@@ -306,13 +339,14 @@ export default function FormResponsePage({ params }: { params: Promise<{ ticket_
                 <div className={styles.coupleRow}>
                     <div className={styles.coupleCol}>
                         <div className={styles.personBadge} data-person="ela">ELA</div>
-                        {renderInput(field, cv.ela, v => handleCoupleChange(field.id, 'ela', v), '-ela')}
+                        {renderInput(field, cv.ela, v => handleCoupleChange(field.id, 'ela', v), '-ela', elaEmpty)}
                     </div>
                     <div className={styles.coupleCol}>
                         <div className={styles.personBadge} data-person="ele">ELE</div>
-                        {renderInput(field, cv.ele, v => handleCoupleChange(field.id, 'ele', v), '-ele')}
+                        {renderInput(field, cv.ele, v => handleCoupleChange(field.id, 'ele', v), '-ele', eleEmpty)}
                     </div>
                 </div>
+                {hasError && <span className={styles.fieldErrorMsg}>Campo obrigatório</span>}
             </div>
         );
     };
@@ -421,6 +455,16 @@ export default function FormResponsePage({ params }: { params: Promise<{ ticket_
                         <h2 className={styles.stepTitle}>{step?.title}</h2>
                     </div>
 
+                    {/* Inline validation error — top of card */}
+                    {error && (
+                        <div className={styles.errorAlert}>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                                <path d="M12 2L2 19h20L12 2z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+                            </svg>
+                            {error}
+                        </div>
+                    )}
+
                     {/* Tent notice — shown only on first step */}
                     {formMeta?.hasTentNotice && currentStep === 0 && (
                         <div className={styles.tentNotice}>
@@ -448,12 +492,6 @@ export default function FormResponsePage({ params }: { params: Promise<{ ticket_
                         )}
                     </div>
 
-                    {/* Error */}
-                    {error && (
-                        <div className={styles.errorAlert}>
-                            <span>⚠️</span> {error}
-                        </div>
-                    )}
                 </div>
             </main>
 
