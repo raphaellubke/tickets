@@ -68,7 +68,7 @@ export default function ParticipantModal({ order, eventName, onClose, onPrintPDF
                     if (response.status === 'completed') {
                         const { data: answersData } = await supabase
                             .from('form_response_answers')
-                            .select('value, form_fields(label, type, order_index)')
+                            .select('value, form_fields(label, type, order_index, is_couple_field)')
                             .eq('response_id', response.id);
 
                         answers = ((answersData || []) as unknown as FormAnswerDetail[]).sort((a, b) =>
