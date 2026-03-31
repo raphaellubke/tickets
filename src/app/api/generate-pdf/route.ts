@@ -11,12 +11,10 @@ interface FormFieldMeta {
     order_index?: number;
     is_couple_field?: boolean | null;
 }
-
 interface FormAnswer {
     value: string | null;
     form_fields?: FormFieldMeta | null;
 }
-
 interface PdfPayload {
     participantName: string;
     participantEmail: string;
@@ -30,46 +28,24 @@ interface PdfPayload {
     formDetails: Record<string, { status: string; answers?: FormAnswer[] }>;
     orgLogoBase64?: string | null;
 }
-
 type RGB = [number, number, number];
 
 // ── Design tokens ──────────────────────────────────────────────────────────
-const T = {
-    // Colors
-    headerBg:   [15,  23,  42] as RGB,   // slate-900
-    sectionBg:  [30,  41,  59] as RGB,   // slate-800
-    dark:       [15,  23,  42] as RGB,   // text primary
-    muted:      [100, 116, 139] as RGB,  // slate-500
-    separator:  [226, 232, 240] as RGB,  // slate-200
-    white:      [255, 255, 255] as RGB,
-    elaBg:      [253, 242, 248] as RGB,  // fuchsia-50
-    elaBorder:  [240, 171, 252] as RGB,  // fuchsia-300
-    elaText:    [162,  28, 175] as RGB,  // fuchsia-700
-    eleBg:      [239, 246, 255] as RGB,  // blue-50
-    eleBorder:  [191, 219, 254] as RGB,  // blue-200
-    eleText:    [ 29,  78, 216] as RGB,  // blue-700
-    amber:      [180,  83,   9] as RGB,
-
-    // Typography (pt)
-    headingSize:  18,
-    subheadSize:  11,
-    metaLabelSz:   7.5,
-    metaValueSz:   11,
-    sectionLabelSz: 8,
-    fieldLabelSz:   7,
-    fieldValueSz:  9.5,
-    badgeSz:        6.5,
-
-    // Spacing (mm) — compact to fit on fewer pages
-    marginX:    14,
-    marginTop:  14,
-    sectionH:    7.5, // section header bar height
-    fieldLabelH: 3.5, // height of field label line
-    badgeH:      4.5, // badge pill height
-    badgeValGap: 3.5, // gap between bottom of badge and start of value
-    lineH:       4.2, // text line height
-    fieldGap:    5,   // vertical gap after separator
-    sectionGap:  3,   // space after section header before first field
+const C = {
+    headerBg:  [15,  23,  42] as RGB,
+    sectionBg: [30,  41,  59] as RGB,
+    dark:      [15,  23,  42] as RGB,
+    muted:     [107, 114, 128] as RGB,
+    sep:       [226, 232, 240] as RGB,
+    rowAlt:    [248, 250, 252] as RGB,
+    white:     [255, 255, 255] as RGB,
+    elaBg:     [253, 242, 248] as RGB,
+    elaBd:     [240, 171, 252] as RGB,
+    elaTxt:    [162,  28, 175] as RGB,
+    eleBg:     [239, 246, 255] as RGB,
+    eleBd:     [191, 219, 254] as RGB,
+    eleTxt:    [ 29,  78, 216] as RGB,
+    amber:     [180,  83,   9] as RGB,
 };
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -77,198 +53,237 @@ function parseCouple(raw: string): { ela: string; ele: string } | null {
     if (!raw.startsWith('{')) return null;
     try {
         const p = JSON.parse(raw);
-        if (p && typeof p === 'object' && ('ela' in p || 'ele' in p)) {
+        if (p && typeof p === 'object' && ('ela' in p || 'ele' in p))
             return { ela: String(p.ela ?? ''), ele: String(p.ele ?? '') };
-        }
     } catch { /* */ }
     return null;
 }
-
 function richness(v: string): number {
     const c = parseCouple(v);
     if (c) return (c.ela || c.ele) ? 3 : 1;
     return v.trim() ? 2 : 0;
 }
-
-function normalizeLabel(label: string): string {
-    return label.replace(/\s*\((ela|ele|homem|mulher)\)\s*$/i, '').trim();
+function normalizeLabel(s: string): string {
+    return s.replace(/\s*\((ela|ele|homem|mulher)\)\s*$/i, '').trim();
 }
+
+// ── Rendered field types ───────────────────────────────────────────────────
+interface CoupleRow { kind: 'couple'; label: string; ela: string; ele: string }
+interface SingleRow { kind: 'single'; label: string; value: string }
+interface Section   { title: string; rows: Array<CoupleRow | SingleRow> }
 
 // ── PDF Builder ────────────────────────────────────────────────────────────
 function buildPDF(payload: PdfPayload): string {
     const { participantName, participantEmail, participantPhone,
             eventName, tickets, formDetails, orgLogoBase64 } = payload;
 
-    const doc  = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-    const PW   = 210;
-    const M    = T.marginX;
-    const CW   = PW - M * 2;           // 182 mm
-    const COL  = (CW - 5) / 2;         // ~88.5 mm per couple column
-    const CGAP = 5;
+    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+    const PW  = 210;
+    const M   = 13;       // left/right margin
+    const CW  = PW - M*2; // 184mm
+
+    // (column width constants unused after layout refactor)
 
     let y = 0;
 
-    // ── Page guard ──────────────────────────────────────────────────────────
-    function ensureSpace(needed: number) {
-        if (y + needed > 282) { doc.addPage(); y = T.marginTop; }
+    function guard(need: number) {
+        if (y + need > 282) { doc.addPage(); y = 14; }
     }
 
     // ── Badge pill ──────────────────────────────────────────────────────────
     function badge(x: number, yy: number, who: 'ela' | 'ele') {
-        const lbl    = who === 'ela' ? 'ELA' : 'ELE';
-        const bg     = who === 'ela' ? T.elaBg    : T.eleBg;
-        const border = who === 'ela' ? T.elaBorder: T.eleBorder;
-        const color  = who === 'ela' ? T.elaText  : T.eleText;
-        const w = 14, h = T.badgeH;
+        const label  = who === 'ela' ? 'ELA' : 'ELE';
+        const bg     = who === 'ela' ? C.elaBg  : C.eleBg;
+        const bd     = who === 'ela' ? C.elaBd  : C.eleBd;
+        const txt    = who === 'ela' ? C.elaTxt : C.eleTxt;
         doc.setFillColor(...bg);
-        doc.setDrawColor(...border);
-        doc.setLineWidth(0.25);
-        doc.roundedRect(x, yy, w, h, 1.5, 1.5, 'FD');
-        doc.setTextColor(...color);
-        doc.setFontSize(T.badgeSz);
+        doc.setDrawColor(...bd);
+        doc.setLineWidth(0.2);
+        doc.roundedRect(x, yy, 13, 4.5, 1.2, 1.2, 'FD');
+        doc.setTextColor(...txt);
+        doc.setFontSize(6);
         doc.setFont('helvetica', 'bold');
-        doc.text(lbl, x + w / 2, yy + 3.5, { align: 'center' });
+        doc.text(label, x + 6.5, yy + 3.2, { align: 'center' });
     }
 
     // ── Section header ──────────────────────────────────────────────────────
     function sectionHeader(title: string) {
-        ensureSpace(T.sectionH + T.sectionGap + 14);
-        doc.setFillColor(...T.sectionBg);
-        doc.rect(M, y, CW, T.sectionH, 'F');
-        doc.setTextColor(...T.white);
-        doc.setFontSize(T.sectionLabelSz);
+        guard(8);
+        doc.setFillColor(...C.sectionBg);
+        doc.rect(M, y, CW, 7, 'F');
+        doc.setTextColor(...C.white);
+        doc.setFontSize(7.5);
         doc.setFont('helvetica', 'bold');
-        doc.text(title.toUpperCase(), M + 5, y + 6);
-        y += T.sectionH + T.sectionGap;
+        doc.text(title.toUpperCase(), M + 4, y + 4.8);
+        y += 7;
     }
 
-    // ── Single field ────────────────────────────────────────────────────────
-    function singleField(label: string, value: string) {
-        const lines = doc.splitTextToSize(value, CW);
-        const needed = T.fieldLabelH + 1 + lines.length * T.lineH + T.fieldGap;
-        ensureSpace(needed);
+    // ── Couple fields: 2 per row, label + ELA/ELE stacked ──────────────────
+    function couplePairGrid(rows: CoupleRow[]) {
+        if (rows.length === 0) return;
+        const COL_W = (CW - 4) / 2; // ~90mm per column
+        const BADGE_W = 14;          // badge + gap before text
+        const VAL_W   = COL_W - BADGE_W - 1;
 
-        // Label
-        doc.setTextColor(...T.muted);
-        doc.setFontSize(T.fieldLabelSz);
-        doc.setFont('helvetica', 'bold');
-        doc.text(label.toUpperCase(), M, y);
-        y += T.fieldLabelH + 1;
+        for (let i = 0; i < rows.length; i += 2) {
+            const r1 = rows[i];
+            const r2 = rows[i + 1] ?? null;
 
-        // Value
-        doc.setTextColor(...T.dark);
-        doc.setFontSize(T.fieldValueSz);
-        doc.setFont('helvetica', 'normal');
-        doc.text(lines, M, y);
-        y += lines.length * T.lineH + 2;
+            doc.setFontSize(7);
+            const elaL1 = doc.splitTextToSize(r1.ela || '—', VAL_W);
+            const eleL1 = doc.splitTextToSize(r1.ele || '—', VAL_W);
+            const elaL2 = r2 ? doc.splitTextToSize(r2.ela || '—', VAL_W) : [];
+            const eleL2 = r2 ? doc.splitTextToSize(r2.ele || '—', VAL_W) : [];
 
-        // Separator
-        doc.setDrawColor(...T.separator);
-        doc.setLineWidth(0.2);
-        doc.line(M, y, PW - M, y);
-        y += T.fieldGap - 2;
+            const lineH = 3.6;
+            const h1 = 4 + elaL1.length * lineH + 1.5 + eleL1.length * lineH + 2;
+            const h2 = r2 ? (4 + elaL2.length * lineH + 1.5 + eleL2.length * lineH + 2) : h1;
+            const RH = Math.max(h1, h2, 16);
+            guard(RH + 2);
+
+            function renderCell(x: number, row: CoupleRow, elaLines: string[], eleLines: string[]) {
+                // Label
+                doc.setTextColor(...C.muted);
+                doc.setFontSize(6);
+                doc.setFont('helvetica', 'bold');
+                doc.text(row.label.toUpperCase(), x, y + 3.5);
+
+                let cy = y + 7.5;
+
+                // ELA
+                badge(x, cy - 3.5, 'ela');
+                doc.setTextColor(...C.dark);
+                doc.setFontSize(7);
+                doc.setFont('helvetica', 'normal');
+                doc.text(elaLines, x + BADGE_W, cy);
+                cy += elaLines.length * lineH + 1.5;
+
+                // ELE
+                badge(x, cy - 3.5, 'ele');
+                doc.text(eleLines, x + BADGE_W, cy);
+            }
+
+            renderCell(M, r1, elaL1, eleL1);
+            if (r2) renderCell(M + COL_W + 4, r2, elaL2, eleL2);
+
+            y += RH;
+            doc.setDrawColor(...C.sep);
+            doc.setLineWidth(0.15);
+            doc.line(M, y, PW - M, y);
+            y += 2.5;
+        }
     }
 
-    // ── Couple field ────────────────────────────────────────────────────────
-    function coupleField(label: string, elaVal: string, eleVal: string) {
-        const elaLines = doc.splitTextToSize(elaVal || '—', COL - 2);
-        const eleLines = doc.splitTextToSize(eleVal || '—', COL - 2);
-        const maxLines = Math.max(elaLines.length, eleLines.length);
-        // box height: top pad(1.5) + badge(badgeH) + badge-val gap + value lines + bottom pad(2)
-        const PAD_TOP = 1.5;
-        const PAD_BOT = 2.5;
-        const boxH = PAD_TOP + T.badgeH + T.badgeValGap + maxLines * T.lineH + PAD_BOT;
-        const needed = T.fieldLabelH + 1 + boxH + T.fieldGap;
-        ensureSpace(needed);
+    // ── Single fields: 2 per row grid ──────────────────────────────────────
+    function singleGrid(singles: SingleRow[]) {
+        if (singles.length === 0) return;
+        const COL_W = (CW - 4) / 2;
+        for (let i = 0; i < singles.length; i += 2) {
+            const f1 = singles[i];
+            const f2 = singles[i + 1] ?? null;
+            const l1 = doc.splitTextToSize(f1.value || '—', COL_W - 2);
+            const l2 = f2 ? doc.splitTextToSize(f2.value || '—', COL_W - 2) : [];
+            const RH = 3.5 + Math.max(l1.length, l2.length || 0) * 3.8 + 2.5;
+            guard(RH + 3);
 
-        // Field label (full width)
-        doc.setTextColor(...T.muted);
-        doc.setFontSize(T.fieldLabelSz);
-        doc.setFont('helvetica', 'bold');
-        doc.text(label.toUpperCase(), M, y);
-        y += T.fieldLabelH + 1;
+            const x1 = M;
+            const x2 = M + COL_W + 4;
 
-        const xEla = M;
-        const xEle = M + COL + CGAP;
+            // Field 1
+            doc.setTextColor(...C.muted);
+            doc.setFontSize(6);
+            doc.setFont('helvetica', 'bold');
+            doc.text(f1.label.toUpperCase(), x1, y);
+            doc.setTextColor(...C.dark);
+            doc.setFontSize(7.5);
+            doc.setFont('helvetica', 'normal');
+            doc.text(l1, x1, y + 3.5);
 
-        // Column backgrounds
-        doc.setFillColor(...T.elaBg);
-        doc.setDrawColor(...T.elaBorder);
-        doc.setLineWidth(0.15);
-        doc.roundedRect(xEla, y, COL, boxH, 2, 2, 'FD');
+            // Field 2
+            if (f2) {
+                doc.setTextColor(...C.muted);
+                doc.setFontSize(6);
+                doc.setFont('helvetica', 'bold');
+                doc.text(f2.label.toUpperCase(), x2, y);
+                doc.setTextColor(...C.dark);
+                doc.setFontSize(7.5);
+                doc.setFont('helvetica', 'normal');
+                doc.text(l2, x2, y + 3.5);
+            }
 
-        doc.setFillColor(...T.eleBg);
-        doc.setDrawColor(...T.eleBorder);
-        doc.roundedRect(xEle, y, COL, boxH, 2, 2, 'FD');
+            y += RH;
+            doc.setDrawColor(...C.sep);
+            doc.setLineWidth(0.15);
+            doc.line(M, y, PW - M, y);
+            y += 2.5;
+        }
+    }
 
-        // Badges (top-left inside each box)
-        badge(xEla + 3, y + PAD_TOP, 'ela');
-        badge(xEle + 3, y + PAD_TOP, 'ele');
+    // ── Render a section's rows grouped by consecutive type ─────────────────
+    function renderSection(section: Section) {
+        if (section.rows.length === 0) return;
+        if (section.title) sectionHeader(section.title);
+        y += 3;
 
-        // Values — placed after badge + gap
-        const valY = y + PAD_TOP + T.badgeH + T.badgeValGap;
-        doc.setTextColor(...T.dark);
-        doc.setFontSize(T.fieldValueSz);
-        doc.setFont('helvetica', 'normal');
-        doc.text(elaLines, xEla + 4, valY);
-        doc.text(eleLines, xEle + 4, valY);
-        y += boxH + 2;
+        // Group consecutive rows of same kind
+        type Run = { kind: 'couple'; rows: CoupleRow[] } | { kind: 'single'; rows: SingleRow[] };
+        const runs: Run[] = [];
+        for (const row of section.rows) {
+            const last = runs[runs.length - 1];
+            if (!last || last.kind !== row.kind) {
+                runs.push({ kind: row.kind, rows: [row] } as Run);
+            } else {
+                (last.rows as any[]).push(row);
+            }
+        }
 
-        // Separator
-        doc.setDrawColor(...T.separator);
-        doc.setLineWidth(0.2);
-        doc.line(M, y, PW - M, y);
-        y += T.fieldGap - 2;
+        for (const run of runs) {
+            if (run.kind === 'couple') {
+                couplePairGrid(run.rows as CoupleRow[]);
+            } else {
+                singleGrid(run.rows as SingleRow[]);
+            }
+        }
+        y += 1;
     }
 
     // ═══════════════════════════════════════════════════════════════════════
-    // HEADER
+    // PAGE HEADER
     // ═══════════════════════════════════════════════════════════════════════
-    doc.setFillColor(...T.headerBg);
-    doc.rect(0, 0, PW, 30, 'F');
-
+    doc.setFillColor(...C.headerBg);
+    doc.rect(0, 0, PW, 28, 'F');
     if (orgLogoBase64) {
         try { doc.addImage(orgLogoBase64, 'PNG', PW - M - 22, 4, 20, 20, undefined, 'FAST'); }
-        catch { /* skip bad logo */ }
+        catch { /* skip */ }
     }
-
-    doc.setTextColor(...T.white);
+    doc.setTextColor(...C.white);
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(T.headingSize);
-    doc.text(eventName || 'Evento', M, 14);
-
+    doc.setFontSize(16);
+    doc.text(eventName || 'Evento', M, 13);
     doc.setFont('helvetica', 'normal');
-    doc.setFontSize(T.subheadSize);
-    doc.setTextColor(148, 163, 184); // slate-400
-    doc.text(participantName || 'Participante', M, 23);
+    doc.setFontSize(10);
+    doc.setTextColor(148, 163, 184);
+    doc.text(participantName || '', M, 22);
+    y = 36;
 
-    y = 40;
-
-    // ── Contact row ─────────────────────────────────────────────────────────
-    // Labels
-    doc.setTextColor(...T.muted);
-    doc.setFontSize(T.metaLabelSz);
+    // Contact row
+    doc.setTextColor(...C.muted);
+    doc.setFontSize(7);
     doc.setFont('helvetica', 'bold');
     doc.text('E-MAIL', M, y);
     doc.text('TELEFONE', M + 100, y);
-    y += 5;
-
-    // Values
-    doc.setTextColor(...T.dark);
-    doc.setFontSize(T.metaValueSz);
+    y += 4.5;
+    doc.setTextColor(...C.dark);
+    doc.setFontSize(9.5);
     doc.setFont('helvetica', 'bold');
-    const emailDisplay = (participantEmail || '—').length > 40
-        ? (participantEmail || '—').substring(0, 39) + '…'
-        : (participantEmail || '—');
-    doc.text(emailDisplay, M, y);
+    const em = (participantEmail || '—').length > 42 ? participantEmail.substring(0, 41) + '…' : (participantEmail || '—');
+    doc.text(em, M, y);
     doc.text(participantPhone || '—', M + 100, y);
-    y += 9;
-
-    // Separator
-    doc.setDrawColor(...T.separator);
-    doc.setLineWidth(0.4);
+    y += 7;
+    doc.setDrawColor(...C.sep);
+    doc.setLineWidth(0.3);
     doc.line(M, y, PW - M, y);
-    y += 8;
+    y += 6;
 
     // ═══════════════════════════════════════════════════════════════════════
     // FORM ANSWERS
@@ -278,15 +293,14 @@ function buildPDF(payload: PdfPayload): string {
         if (!detail) continue;
 
         if (detail.status === 'pending') {
-            ensureSpace(12);
-            doc.setFontSize(9);
+            guard(10);
+            doc.setFontSize(8.5);
             doc.setFont('helvetica', 'italic');
-            doc.setTextColor(...T.amber);
+            doc.setTextColor(...C.amber);
             doc.text('Formulário ainda não preenchido', M, y);
-            y += 10;
+            y += 8;
             continue;
         }
-
         if (!detail.answers?.length) continue;
 
         // Sort
@@ -294,7 +308,7 @@ function buildPDF(payload: PdfPayload): string {
             (a, b) => (a.form_fields?.order_index ?? 0) - (b.form_fields?.order_index ?? 0)
         );
 
-        // Deduplicate by normalised label, keep richest value
+        // Deduplicate by normalised label
         const deduped = new Map<string, FormAnswer>();
         for (const ans of sorted) {
             const raw = ans.form_fields?.label;
@@ -309,63 +323,57 @@ function buildPDF(payload: PdfPayload): string {
             }
         }
 
-        for (const ans of deduped.values()) {
-            const field = ans.form_fields;
-            if (!field?.label) continue;
+        // Build sections
+        const sections: Section[] = [];
+        let curSection: Section = { title: '', rows: [] };
 
+        for (const ans of deduped.values()) {
+            const field  = ans.form_fields;
+            if (!field?.label) continue;
             const label  = field.label;
             const type   = field.type || 'text';
             const rawVal = (ans.value || '').trim();
 
-            // Section header
             if (type === 'section_header') {
-                if (y > T.marginTop + 10) y += 2;
-                sectionHeader(label);
+                if (curSection.rows.length > 0 || curSection.title) sections.push(curSection);
+                curSection = { title: label, rows: [] };
                 continue;
             }
 
-            // Parse couple JSON
             const couple = parseCouple(rawVal);
-
             if (couple) {
-                const bothEmpty = !couple.ela && !couple.ele;
-                if (bothEmpty) continue; // skip truly empty fields
-
+                if (!couple.ela && !couple.ele) continue; // both empty — skip
                 const forceSingle = field.is_couple_field === false;
-
                 if (forceSingle) {
-                    // Shared couple field — show smartest single value
-                    let display: string;
-                    if (couple.ela === couple.ele) {
-                        display = couple.ela || couple.ele;
-                    } else if (couple.ela && couple.ele) {
-                        display = `Ela: ${couple.ela}  /  Ele: ${couple.ele}`;
-                    } else {
-                        display = couple.ela || couple.ele;
-                    }
-                    if (display) singleField(label, display);
+                    const display = couple.ela === couple.ele
+                        ? (couple.ela || couple.ele)
+                        : (couple.ela && couple.ele ? `Ela: ${couple.ela}  /  Ele: ${couple.ele}` : couple.ela || couple.ele);
+                    if (display) curSection.rows.push({ kind: 'single', label, value: display });
                 } else {
-                    coupleField(label, couple.ela, couple.ele);
+                    curSection.rows.push({ kind: 'couple', label, ela: couple.ela, ele: couple.ele });
                 }
             } else {
-                // Plain text
                 if (!rawVal) continue;
-                singleField(label, rawVal);
+                curSection.rows.push({ kind: 'single', label, value: rawVal });
             }
         }
+        if (curSection.rows.length > 0 || curSection.title) sections.push(curSection);
+
+        // Render all sections
+        for (const section of sections) renderSection(section);
     }
 
-    // ── Footer ──────────────────────────────────────────────────────────────
-    const footerY = 289;
-    doc.setDrawColor(...T.separator);
-    doc.setLineWidth(0.3);
-    doc.line(M, footerY - 4, PW - M, footerY - 4);
-    doc.setFontSize(7);
+    // Footer
+    const FY = 289;
+    doc.setDrawColor(...C.sep);
+    doc.setLineWidth(0.25);
+    doc.line(M, FY - 3, PW - M, FY - 3);
+    doc.setFontSize(6.5);
     doc.setFont('helvetica', 'normal');
-    doc.setTextColor(...T.muted);
+    doc.setTextColor(...C.muted);
     doc.text(
         `Gerado em ${new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}`,
-        PW / 2, footerY, { align: 'center' }
+        PW / 2, FY, { align: 'center' }
     );
 
     return doc.output('datauristring');
