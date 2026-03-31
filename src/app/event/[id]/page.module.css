@@ -664,6 +664,7 @@
         position: static;
         max-width: 600px;
         margin: 0 auto;
+        order: -1;
     }
 }
 

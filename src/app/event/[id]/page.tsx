@@ -372,7 +372,9 @@ export default function EventDetails({ params }: { params: Promise<{ id: string 
         };
         
         // Generate fresh session ID for this checkout attempt
-        const sessionId = crypto.randomUUID();
+        const sessionId = (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function')
+            ? crypto.randomUUID()
+            : `${Date.now()}-${Math.random().toString(36).substr(2, 9)}-${Math.random().toString(36).substr(2, 9)}`;
         sessionStorage.setItem('reservationSessionId', sessionId);
         sessionStorage.setItem('checkoutData', JSON.stringify(checkoutData));
         window.location.href = `/checkout?event=${eventId}`;
