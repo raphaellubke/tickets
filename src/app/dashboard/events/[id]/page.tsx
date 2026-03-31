@@ -685,6 +685,11 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
                                             />
                                         </td>
                                         <td>
+                                            {p.order_number && (
+                                                <div style={{ fontSize: '11px', fontWeight: 600, color: '#6b7280', fontFamily: 'monospace', marginBottom: '2px' }}>
+                                                    #{p.order_number}
+                                                </div>
+                                            )}
                                             <div className={styles.nameBold}>{p.participant_name}</div>
                                             <div className={styles.emailText}>{p.participant_email}</div>
                                         </td>
