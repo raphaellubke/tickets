@@ -207,22 +207,55 @@ function buildPDF(payload: PdfPayload): string {
             (a, b) => (a.form_fields?.order_index ?? 0) - (b.form_fields?.order_index ?? 0)
         );
 
+        // ── Deduplicate by label ──────────────────────────────────────────
+        // When a form had "(Ela)"/"(Ele)" fields before migration, old responses
+        // may contain duplicate labels. We keep the "richest" answer per label:
+        // couple JSON > non-empty plain > empty/null.
+        function richness(v: string): number {
+            if (!v) return 0;
+            if (v.startsWith('{')) {
+                try {
+                    const p = JSON.parse(v);
+                    if (p && ('ela' in p || 'ele' in p)) return 3;
+                } catch { /* */ }
+            }
+            return v.trim() ? 1 : 0;
+        }
+
+        const deduped = new Map<string, FormAnswer>();
         for (const ans of sorted) {
+            const label = ans.form_fields?.label;
+            if (!label) continue;
+            // Strip legacy "(Ela)"/"(Ele)" suffixes to merge duplicate labels
+            const normLabel = label.replace(/\s*\((ela|ele)\)\s*$/i, '').trim();
+            const existing = deduped.get(normLabel);
+            if (!existing || richness(ans.value || '') > richness(existing.value || '')) {
+                // Clone the answer but with the normalised label so it renders cleanly
+                deduped.set(normLabel, {
+                    ...ans,
+                    form_fields: ans.form_fields
+                        ? { ...ans.form_fields, label: normLabel }
+                        : ans.form_fields,
+                });
+            }
+        }
+
+        for (const ans of deduped.values()) {
             const field = ans.form_fields;
             if (!field?.label) continue;
 
-            const label   = field.label;
-            const type    = field.type || 'text';
-            const rawVal  = ans.value || '';
+            const label  = field.label;
+            const type   = field.type || 'text';
+            const rawVal = ans.value || '';
 
             // Section header
             if (type === 'section_header') {
-                if (y > 16) y += 2; // small gap before section
+                if (y > 16) y += 2;
                 drawSectionHeader(label);
                 continue;
             }
 
-            // Parse couple JSON
+            // Try to parse couple JSON
             let elaVal = '', eleVal = '', singleVal = rawVal;
             let isCouple = false;
             if (rawVal.startsWith('{')) {
@@ -236,13 +269,22 @@ function buildPDF(payload: PdfPayload): string {
                 } catch { /* not JSON */ }
             }
 
-            // If field is explicitly marked as single, override couple detection
-            if (field.is_couple_field === false) isCouple = false;
+            // Respect explicit is_couple_field=false (field is single even in couple form)
+            if (field.is_couple_field === false) {
+                isCouple = false;
+                // If value was stored as couple JSON, render both values inline
+                if (elaVal || eleVal) {
+                    const parts: string[] = [];
+                    if (elaVal) parts.push(`Ela: ${elaVal}`);
+                    if (eleVal) parts.push(`Ele: ${eleVal}`);
+                    singleVal = parts.join('  /  ');
+                }
+            }
 
             if (isCouple) {
                 drawCoupleField(label, elaVal, eleVal);
             } else {
-                drawSingleField(label, singleVal);
+                drawSingleField(label, singleVal || '-');
             }
         }
     }
