@@ -207,46 +207,57 @@ function buildPDF(payload: PdfPayload): string {
             (a, b) => (a.form_fields?.order_index ?? 0) - (b.form_fields?.order_index ?? 0)
         );
 
-        // ── Deduplicate by label ──────────────────────────────────────────
-        // When a form had "(Ela)"/"(Ele)" fields before migration, old responses
-        // may contain duplicate labels. We keep the "richest" answer per label:
-        // couple JSON > non-empty plain > empty/null.
-        function richness(v: string): number {
-            if (!v) return 0;
-            if (v.startsWith('{')) {
+        // ── Helpers ───────────────────────────────────────────────────────
+
+        // Parse a raw value: returns { elaVal, eleVal, isJson }
+        function parseVal(raw: string) {
+            if (raw.startsWith('{')) {
                 try {
-                    const p = JSON.parse(v);
-                    if (p && ('ela' in p || 'ele' in p)) return 3;
+                    const p = JSON.parse(raw);
+                    if (p && typeof p === 'object' && ('ela' in p || 'ele' in p)) {
+                        return { elaVal: String(p.ela ?? ''), eleVal: String(p.ele ?? ''), isJson: true };
+                    }
                 } catch { /* */ }
             }
-            return v.trim() ? 1 : 0;
+            return { elaVal: '', eleVal: '', isJson: false };
         }
 
+        // Richness score: non-empty JSON with values > plain text > empty JSON > empty
+        function richness(v: string): number {
+            if (!v) return 0;
+            const { elaVal, eleVal, isJson } = parseVal(v);
+            if (isJson) return (elaVal || eleVal) ? 3 : 1; // JSON with values > empty JSON
+            return v.trim() ? 2 : 0;
+        }
+
+        // Normalize legacy label suffixes: (Ela), (Ele), (Homem), (Mulher)
+        function normLabel(label: string) {
+            return label.replace(/\s*\((ela|ele|homem|mulher)\)\s*$/i, '').trim();
+        }
+
+        // ── Deduplicate by normalised label ──────────────────────────────
         const deduped = new Map<string, FormAnswer>();
         for (const ans of sorted) {
             const label = ans.form_fields?.label;
             if (!label) continue;
-            // Strip legacy "(Ela)"/"(Ele)" suffixes to merge duplicate labels
-            const normLabel = label.replace(/\s*\((ela|ele)\)\s*$/i, '').trim();
-            const existing = deduped.get(normLabel);
+            const key = normLabel(label);
+            const existing = deduped.get(key);
             if (!existing || richness(ans.value || '') > richness(existing.value || '')) {
-                // Clone the answer but with the normalised label so it renders cleanly
-                deduped.set(normLabel, {
+                deduped.set(key, {
                     ...ans,
-                    form_fields: ans.form_fields
-                        ? { ...ans.form_fields, label: normLabel }
-                        : ans.form_fields,
+                    form_fields: ans.form_fields ? { ...ans.form_fields, label: key } : ans.form_fields,
                 });
             }
         }
 
+        // ── Render ────────────────────────────────────────────────────────
         for (const ans of deduped.values()) {
             const field = ans.form_fields;
             if (!field?.label) continue;
 
             const label  = field.label;
             const type   = field.type || 'text';
-            const rawVal = ans.value || '';
+            const rawVal = (ans.value || '').trim();
 
             // Section header
             if (type === 'section_header') {
@@ -255,36 +266,48 @@ function buildPDF(payload: PdfPayload): string {
                 continue;
             }
 
-            // Try to parse couple JSON
-            let elaVal = '', eleVal = '', singleVal = rawVal;
-            let isCouple = false;
-            if (rawVal.startsWith('{')) {
-                try {
-                    const parsed = JSON.parse(rawVal);
-                    if (parsed && typeof parsed === 'object' && ('ele' in parsed || 'ela' in parsed)) {
-                        elaVal   = String(parsed.ela ?? '');
-                        eleVal   = String(parsed.ele ?? '');
-                        isCouple = true;
-                    }
-                } catch { /* not JSON */ }
-            }
+            // Parse JSON couple values
+            const { elaVal, eleVal, isJson } = parseVal(rawVal);
 
-            // Respect explicit is_couple_field=false (field is single even in couple form)
-            if (field.is_couple_field === false) {
-                isCouple = false;
-                // If value was stored as couple JSON, render both values inline
-                if (elaVal || eleVal) {
-                    const parts: string[] = [];
-                    if (elaVal) parts.push(`Ela: ${elaVal}`);
-                    if (eleVal) parts.push(`Ele: ${eleVal}`);
-                    singleVal = parts.join('  /  ');
+            // Determine rendering mode
+            // is_couple_field: true → ELA|ELE columns
+            //                  false → single field
+            //                  null/undefined → detect by JSON content
+            const forceCouple = field.is_couple_field === true;
+            const forceSingle = field.is_couple_field === false;
+
+            let renderAsCouple = false;
+            let displayVal = rawVal;
+
+            if (isJson) {
+                const bothEmpty = !elaVal && !eleVal;
+                if (bothEmpty) {
+                    // Truly empty — skip this field entirely
+                    continue;
                 }
+                if (forceSingle) {
+                    // Single field that stored couple JSON — show smartly
+                    if (elaVal === eleVal) {
+                        // Same value → show once
+                        displayVal = elaVal || eleVal;
+                    } else if (elaVal && eleVal) {
+                        // Different → show "Ela: X  /  Ele: Y"
+                        displayVal = `Ela: ${elaVal}  /  Ele: ${eleVal}`;
+                    } else {
+                        displayVal = elaVal || eleVal;
+                    }
+                } else if (forceCouple || (!forceSingle)) {
+                    renderAsCouple = true;
+                }
+            } else {
+                // Plain text value
+                if (!rawVal) continue; // skip empty
             }
 
-            if (isCouple) {
+            if (renderAsCouple) {
                 drawCoupleField(label, elaVal, eleVal);
             } else {
-                drawSingleField(label, singleVal || '-');
+                drawSingleField(label, displayVal || '-');
             }
         }
     }
