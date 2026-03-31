@@ -57,18 +57,19 @@ const T = {
     metaValueSz:   11,
     sectionLabelSz: 8,
     fieldLabelSz:   7,
-    fieldValueSz:  10,
+    fieldValueSz:  9.5,
     badgeSz:        6.5,
 
-    // Spacing (mm)
-    marginX:   14,
-    marginTop: 16,
-    sectionH:   9,    // section header bar height
-    fieldLabelH: 4,   // height of field label line
-    badgeH:      5,   // badge pill height
-    lineH:       4.8, // text line height
-    fieldGap:    8,   // vertical space after each field (incl separator)
-    sectionGap:  4,   // space after section header before first field
+    // Spacing (mm) — compact to fit on fewer pages
+    marginX:    14,
+    marginTop:  14,
+    sectionH:    7.5, // section header bar height
+    fieldLabelH: 3.5, // height of field label line
+    badgeH:      4.5, // badge pill height
+    badgeValGap: 3.5, // gap between bottom of badge and start of value
+    lineH:       4.2, // text line height
+    fieldGap:    5,   // vertical gap after separator
+    sectionGap:  3,   // space after section header before first field
 };
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -159,13 +160,13 @@ function buildPDF(payload: PdfPayload): string {
         doc.setFontSize(T.fieldValueSz);
         doc.setFont('helvetica', 'normal');
         doc.text(lines, M, y);
-        y += lines.length * T.lineH + 3;
+        y += lines.length * T.lineH + 2;
 
         // Separator
         doc.setDrawColor(...T.separator);
         doc.setLineWidth(0.2);
         doc.line(M, y, PW - M, y);
-        y += 5;
+        y += T.fieldGap - 2;
     }
 
     // ── Couple field ────────────────────────────────────────────────────────
@@ -173,7 +174,11 @@ function buildPDF(payload: PdfPayload): string {
         const elaLines = doc.splitTextToSize(elaVal || '—', COL - 2);
         const eleLines = doc.splitTextToSize(eleVal || '—', COL - 2);
         const maxLines = Math.max(elaLines.length, eleLines.length);
-        const needed = T.fieldLabelH + 1 + T.badgeH + 3 + maxLines * T.lineH + T.fieldGap;
+        // box height: top pad(1.5) + badge(badgeH) + badge-val gap + value lines + bottom pad(2)
+        const PAD_TOP = 1.5;
+        const PAD_BOT = 2.5;
+        const boxH = PAD_TOP + T.badgeH + T.badgeValGap + maxLines * T.lineH + PAD_BOT;
+        const needed = T.fieldLabelH + 1 + boxH + T.fieldGap;
         ensureSpace(needed);
 
         // Field label (full width)
@@ -186,34 +191,34 @@ function buildPDF(payload: PdfPayload): string {
         const xEla = M;
         const xEle = M + COL + CGAP;
 
-        // Subtle column backgrounds
+        // Column backgrounds
         doc.setFillColor(...T.elaBg);
         doc.setDrawColor(...T.elaBorder);
         doc.setLineWidth(0.15);
-        doc.roundedRect(xEla, y, COL, T.badgeH + 3 + maxLines * T.lineH + 3, 2, 2, 'FD');
+        doc.roundedRect(xEla, y, COL, boxH, 2, 2, 'FD');
 
         doc.setFillColor(...T.eleBg);
         doc.setDrawColor(...T.eleBorder);
-        doc.roundedRect(xEle, y, COL, T.badgeH + 3 + maxLines * T.lineH + 3, 2, 2, 'FD');
+        doc.roundedRect(xEle, y, COL, boxH, 2, 2, 'FD');
 
-        // Badges inside columns
-        badge(xEla + 3, y + 1.5, 'ela');
-        badge(xEle + 3, y + 1.5, 'ele');
-        y += T.badgeH + 4;
+        // Badges (top-left inside each box)
+        badge(xEla + 3, y + PAD_TOP, 'ela');
+        badge(xEle + 3, y + PAD_TOP, 'ele');
 
-        // Values
+        // Values — placed after badge + gap
+        const valY = y + PAD_TOP + T.badgeH + T.badgeValGap;
         doc.setTextColor(...T.dark);
         doc.setFontSize(T.fieldValueSz);
         doc.setFont('helvetica', 'normal');
-        doc.text(elaLines, xEla + 4, y);
-        doc.text(eleLines, xEle + 4, y);
-        y += maxLines * T.lineH + 5;
+        doc.text(elaLines, xEla + 4, valY);
+        doc.text(eleLines, xEle + 4, valY);
+        y += boxH + 2;
 
         // Separator
         doc.setDrawColor(...T.separator);
         doc.setLineWidth(0.2);
         doc.line(M, y, PW - M, y);
-        y += 5;
+        y += T.fieldGap - 2;
     }
 
     // ═══════════════════════════════════════════════════════════════════════
