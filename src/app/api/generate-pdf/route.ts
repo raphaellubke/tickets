@@ -79,143 +79,129 @@ function buildPDF(payload: PdfPayload): string {
 
     const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
     const PW  = 210;
-    const M   = 13;       // left/right margin
-    const CW  = PW - M*2; // 184mm
+    const M   = 9;         // tight margins to gain width
+    const CW  = PW - M*2; // 192mm
+    const COLS = 3;        // 3 fields per row
+    const GAP  = 3;        // gap between columns
+    const COL_W = (CW - GAP * (COLS - 1)) / COLS; // ~62mm
 
-    // (column width constants unused after layout refactor)
+    const BADGE_W  = 11;   // badge pill width
+    const BADGE_H  = 3.5;  // badge pill height
+    const BADGE_GAP = 12.5; // badge width + small gap to text start
+    const VAL_W    = COL_W - BADGE_GAP - 1; // text width after badge
+    const LINE_H   = 3.2;  // line height for values
 
     let y = 0;
 
     function guard(need: number) {
-        if (y + need > 282) { doc.addPage(); y = 14; }
+        if (y + need > 284) { doc.addPage(); y = 12; }
     }
+
+    function colX(col: number): number { return M + col * (COL_W + GAP); }
 
     // ── Badge pill ──────────────────────────────────────────────────────────
     function badge(x: number, yy: number, who: 'ela' | 'ele') {
-        const label  = who === 'ela' ? 'ELA' : 'ELE';
-        const bg     = who === 'ela' ? C.elaBg  : C.eleBg;
-        const bd     = who === 'ela' ? C.elaBd  : C.eleBd;
-        const txt    = who === 'ela' ? C.elaTxt : C.eleTxt;
-        doc.setFillColor(...bg);
-        doc.setDrawColor(...bd);
-        doc.setLineWidth(0.2);
-        doc.roundedRect(x, yy, 13, 4.5, 1.2, 1.2, 'FD');
-        doc.setTextColor(...txt);
-        doc.setFontSize(6);
-        doc.setFont('helvetica', 'bold');
-        doc.text(label, x + 6.5, yy + 3.2, { align: 'center' });
+        const lbl = who === 'ela' ? 'ELA' : 'ELE';
+        const bg  = who === 'ela' ? C.elaBg  : C.eleBg;
+        const bd  = who === 'ela' ? C.elaBd  : C.eleBd;
+        const txt = who === 'ela' ? C.elaTxt : C.eleTxt;
+        doc.setFillColor(...bg); doc.setDrawColor(...bd); doc.setLineWidth(0.15);
+        doc.roundedRect(x, yy, BADGE_W, BADGE_H, 0.8, 0.8, 'FD');
+        doc.setTextColor(...txt); doc.setFontSize(5); doc.setFont('helvetica', 'bold');
+        doc.text(lbl, x + BADGE_W / 2, yy + 2.5, { align: 'center' });
     }
 
     // ── Section header ──────────────────────────────────────────────────────
     function sectionHeader(title: string) {
-        guard(8);
+        guard(7);
         doc.setFillColor(...C.sectionBg);
-        doc.rect(M, y, CW, 7, 'F');
+        doc.rect(M, y, CW, 5.5, 'F');
         doc.setTextColor(...C.white);
-        doc.setFontSize(7.5);
+        doc.setFontSize(6.5);
         doc.setFont('helvetica', 'bold');
-        doc.text(title.toUpperCase(), M + 4, y + 4.8);
-        y += 7;
+        doc.text(title.toUpperCase(), M + 3, y + 3.8);
+        y += 5.5;
     }
 
-    // ── Couple fields: 2 per row, label + ELA/ELE stacked ──────────────────
+    // ── Couple fields: 3 per row, label + ELA/ELE stacked ──────────────────
     function couplePairGrid(rows: CoupleRow[]) {
         if (rows.length === 0) return;
-        const COL_W = (CW - 4) / 2; // ~90mm per column
-        const BADGE_W = 14;          // badge + gap before text
-        const VAL_W   = COL_W - BADGE_W - 1;
 
-        for (let i = 0; i < rows.length; i += 2) {
-            const r1 = rows[i];
-            const r2 = rows[i + 1] ?? null;
+        for (let i = 0; i < rows.length; i += COLS) {
+            const batch = rows.slice(i, i + COLS);
 
-            doc.setFontSize(7);
-            const elaL1 = doc.splitTextToSize(r1.ela || '—', VAL_W);
-            const eleL1 = doc.splitTextToSize(r1.ele || '—', VAL_W);
-            const elaL2 = r2 ? doc.splitTextToSize(r2.ela || '—', VAL_W) : [];
-            const eleL2 = r2 ? doc.splitTextToSize(r2.ele || '—', VAL_W) : [];
+            // Pre-compute lines for each cell
+            doc.setFontSize(6.5);
+            const cells = batch.map(r => ({
+                row: r,
+                elaL: doc.splitTextToSize(r.ela || '—', VAL_W),
+                eleL: doc.splitTextToSize(r.ele || '—', VAL_W),
+            }));
 
-            const lineH = 3.6;
-            const h1 = 4 + elaL1.length * lineH + 1.5 + eleL1.length * lineH + 2;
-            const h2 = r2 ? (4 + elaL2.length * lineH + 1.5 + eleL2.length * lineH + 2) : h1;
-            const RH = Math.max(h1, h2, 16);
+            const RH = Math.max(...cells.map(c =>
+                3.5 + c.elaL.length * LINE_H + 1 + c.eleL.length * LINE_H + 2
+            ), 14);
             guard(RH + 2);
 
-            function renderCell(x: number, row: CoupleRow, elaLines: string[], eleLines: string[]) {
+            cells.forEach((cell, col) => {
+                const x = colX(col);
                 // Label
                 doc.setTextColor(...C.muted);
-                doc.setFontSize(6);
+                doc.setFontSize(5.5);
                 doc.setFont('helvetica', 'bold');
-                doc.text(row.label.toUpperCase(), x, y + 3.5);
-
-                let cy = y + 7.5;
-
+                doc.text(cell.row.label.toUpperCase(), x, y + 3.2);
+                let cy = y + 7;
                 // ELA
-                badge(x, cy - 3.5, 'ela');
+                badge(x, cy - BADGE_H + 0.2, 'ela');
                 doc.setTextColor(...C.dark);
-                doc.setFontSize(7);
+                doc.setFontSize(6.5);
                 doc.setFont('helvetica', 'normal');
-                doc.text(elaLines, x + BADGE_W, cy);
-                cy += elaLines.length * lineH + 1.5;
-
+                doc.text(cell.elaL, x + BADGE_GAP, cy);
+                cy += cell.elaL.length * LINE_H + 1;
                 // ELE
-                badge(x, cy - 3.5, 'ele');
-                doc.text(eleLines, x + BADGE_W, cy);
-            }
-
-            renderCell(M, r1, elaL1, eleL1);
-            if (r2) renderCell(M + COL_W + 4, r2, elaL2, eleL2);
+                badge(x, cy - BADGE_H + 0.2, 'ele');
+                doc.text(cell.eleL, x + BADGE_GAP, cy);
+            });
 
             y += RH;
-            doc.setDrawColor(...C.sep);
-            doc.setLineWidth(0.15);
+            doc.setDrawColor(...C.sep); doc.setLineWidth(0.12);
             doc.line(M, y, PW - M, y);
-            y += 2.5;
+            y += 2;
         }
     }
 
-    // ── Single fields: 2 per row grid ──────────────────────────────────────
+    // ── Single fields: 3 per row grid ──────────────────────────────────────
     function singleGrid(singles: SingleRow[]) {
         if (singles.length === 0) return;
-        const COL_W = (CW - 4) / 2;
-        for (let i = 0; i < singles.length; i += 2) {
-            const f1 = singles[i];
-            const f2 = singles[i + 1] ?? null;
-            const l1 = doc.splitTextToSize(f1.value || '—', COL_W - 2);
-            const l2 = f2 ? doc.splitTextToSize(f2.value || '—', COL_W - 2) : [];
-            const RH = 3.5 + Math.max(l1.length, l2.length || 0) * 3.8 + 2.5;
-            guard(RH + 3);
 
-            const x1 = M;
-            const x2 = M + COL_W + 4;
+        for (let i = 0; i < singles.length; i += COLS) {
+            const batch = singles.slice(i, i + COLS);
 
-            // Field 1
-            doc.setTextColor(...C.muted);
-            doc.setFontSize(6);
-            doc.setFont('helvetica', 'bold');
-            doc.text(f1.label.toUpperCase(), x1, y);
-            doc.setTextColor(...C.dark);
-            doc.setFontSize(7.5);
-            doc.setFont('helvetica', 'normal');
-            doc.text(l1, x1, y + 3.5);
+            doc.setFontSize(6.5);
+            const cells = batch.map(f => ({
+                f,
+                lines: doc.splitTextToSize(f.value || '—', COL_W - 1),
+            }));
 
-            // Field 2
-            if (f2) {
+            const RH = 3 + Math.max(...cells.map(c => c.lines.length)) * LINE_H + 2;
+            guard(RH + 2);
+
+            cells.forEach((cell, col) => {
+                const x = colX(col);
                 doc.setTextColor(...C.muted);
-                doc.setFontSize(6);
+                doc.setFontSize(5.5);
                 doc.setFont('helvetica', 'bold');
-                doc.text(f2.label.toUpperCase(), x2, y);
+                doc.text(cell.f.label.toUpperCase(), x, y);
                 doc.setTextColor(...C.dark);
-                doc.setFontSize(7.5);
+                doc.setFontSize(6.5);
                 doc.setFont('helvetica', 'normal');
-                doc.text(l2, x2, y + 3.5);
-            }
+                doc.text(cell.lines, x, y + 3);
+            });
 
             y += RH;
-            doc.setDrawColor(...C.sep);
-            doc.setLineWidth(0.15);
+            doc.setDrawColor(...C.sep); doc.setLineWidth(0.12);
             doc.line(M, y, PW - M, y);
-            y += 2.5;
+            y += 2;
         }
     }
 
@@ -223,67 +209,55 @@ function buildPDF(payload: PdfPayload): string {
     function renderSection(section: Section) {
         if (section.rows.length === 0) return;
         if (section.title) sectionHeader(section.title);
-        y += 3;
+        y += 2.5;
 
-        // Group consecutive rows of same kind
         type Run = { kind: 'couple'; rows: CoupleRow[] } | { kind: 'single'; rows: SingleRow[] };
         const runs: Run[] = [];
         for (const row of section.rows) {
             const last = runs[runs.length - 1];
             if (!last || last.kind !== row.kind) {
                 runs.push({ kind: row.kind, rows: [row] } as Run);
-            } else {
-                (last.rows as any[]).push(row);
-            }
+            } else { (last.rows as any[]).push(row); }
         }
-
         for (const run of runs) {
-            if (run.kind === 'couple') {
-                couplePairGrid(run.rows as CoupleRow[]);
-            } else {
-                singleGrid(run.rows as SingleRow[]);
-            }
+            if (run.kind === 'couple') couplePairGrid(run.rows as CoupleRow[]);
+            else singleGrid(run.rows as SingleRow[]);
         }
         y += 1;
     }
 
     // ═══════════════════════════════════════════════════════════════════════
-    // PAGE HEADER
+    // PAGE HEADER — compact 22mm
     // ═══════════════════════════════════════════════════════════════════════
     doc.setFillColor(...C.headerBg);
-    doc.rect(0, 0, PW, 28, 'F');
+    doc.rect(0, 0, PW, 22, 'F');
     if (orgLogoBase64) {
-        try { doc.addImage(orgLogoBase64, 'PNG', PW - M - 22, 4, 20, 20, undefined, 'FAST'); }
+        try { doc.addImage(orgLogoBase64, 'PNG', PW - M - 18, 2, 16, 16, undefined, 'FAST'); }
         catch { /* skip */ }
     }
     doc.setTextColor(...C.white);
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(16);
-    doc.text(eventName || 'Evento', M, 13);
+    doc.setFontSize(13);
+    doc.text(eventName || 'Evento', M, 10);
     doc.setFont('helvetica', 'normal');
-    doc.setFontSize(10);
+    doc.setFontSize(8.5);
     doc.setTextColor(148, 163, 184);
-    doc.text(participantName || '', M, 22);
-    y = 36;
+    doc.text(participantName || '', M, 18);
+    y = 29;
 
-    // Contact row
-    doc.setTextColor(...C.muted);
-    doc.setFontSize(7);
-    doc.setFont('helvetica', 'bold');
+    // Compact contact row: email | telefone | order number in one line
+    const em = (participantEmail || '—').length > 38 ? participantEmail.substring(0, 37) + '…' : (participantEmail || '—');
+    doc.setTextColor(...C.muted); doc.setFontSize(5.5); doc.setFont('helvetica', 'bold');
     doc.text('E-MAIL', M, y);
-    doc.text('TELEFONE', M + 100, y);
-    y += 4.5;
-    doc.setTextColor(...C.dark);
-    doc.setFontSize(9.5);
-    doc.setFont('helvetica', 'bold');
-    const em = (participantEmail || '—').length > 42 ? participantEmail.substring(0, 41) + '…' : (participantEmail || '—');
+    doc.text('TELEFONE', M + 110, y);
+    y += 3.5;
+    doc.setTextColor(...C.dark); doc.setFontSize(8); doc.setFont('helvetica', 'bold');
     doc.text(em, M, y);
-    doc.text(participantPhone || '—', M + 100, y);
-    y += 7;
-    doc.setDrawColor(...C.sep);
-    doc.setLineWidth(0.3);
+    doc.text(participantPhone || '—', M + 110, y);
+    y += 5;
+    doc.setDrawColor(...C.sep); doc.setLineWidth(0.25);
     doc.line(M, y, PW - M, y);
-    y += 6;
+    y += 4;
 
     // ═══════════════════════════════════════════════════════════════════════
     // FORM ANSWERS
