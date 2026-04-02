@@ -8,11 +8,6 @@ import Header from '@/components/Header/Header';
 import Footer from '@/components/Footer/Footer';
 import styles from './page.module.css';
 
-declare global {
-    interface Window {
-        MercadoPago: any;
-    }
-}
 
 interface CheckoutTicket {
     ticketTypeId: string;
@@ -79,8 +74,14 @@ function CheckoutPageContent() {
     } | null>(null);
     const [pixCopied, setPixCopied] = useState(false);
     const pixPollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
-    const cardFormRef = useRef<any>(null);
-    const mpScriptLoadedRef = useRef(false);
+
+    // Card form state (no MP SDK iframes)
+    const [cardData, setCardData] = useState({ number: '', expiry: '', cvv: '', name: '' });
+    const [installmentOptions, setInstallmentOptions] = useState<Array<{ installments: number; recommended_message: string }>>([]);
+    const [selectedInstallments, setSelectedInstallments] = useState(1);
+    const [cardPaymentMethodId, setCardPaymentMethodId] = useState('');
+    const [cardIssuerId, setCardIssuerId] = useState('');
+    const [fetchingInstallments, setFetchingInstallments] = useState(false);
 
     useEffect(() => {
         async function loadCheckoutData() {
@@ -414,53 +415,23 @@ function CheckoutPageContent() {
         }
     }
 
-    // Load MP.js when on card step
+    // Fetch installments when BIN (first 6 digits) is available
     useEffect(() => {
-        if (checkoutStep !== 'card') return;
-        const PUBLIC_KEY = process.env.NEXT_PUBLIC_MERCADOPAGO_PUBLIC_KEY;
-        if (!PUBLIC_KEY) { setError('Chave de pagamento não configurada'); return; }
-
-        const initCardForm = () => {
-            if (cardFormRef.current) return; // already mounted
-            const finalTotal = Math.max(0, total - (appliedCoupon?.discount_amount || 0));
-            const mp = new window.MercadoPago(PUBLIC_KEY, { locale: 'pt-BR' });
-            cardFormRef.current = mp.cardForm({
-                amount: String(finalTotal > 0 ? finalTotal : 1),
-                iframe: true,
-                form: {
-                    id: 'form-checkout',
-                    cardholderName: { id: 'form-checkout__cardholderName', placeholder: 'Nome como no cartão' },
-                    cardholderEmail: { id: 'form-checkout__cardholderEmail', placeholder: 'E-mail' },
-                    cardNumber: { id: 'form-checkout__cardNumber', placeholder: 'Número do cartão' },
-                    expirationDate: { id: 'form-checkout__expirationDate', placeholder: 'MM/AA' },
-                    securityCode: { id: 'form-checkout__securityCode', placeholder: 'CVV' },
-                    installments: { id: 'form-checkout__installments' },
-                    identificationType: { id: 'form-checkout__identificationType' },
-                    identificationNumber: { id: 'form-checkout__identificationNumber', placeholder: 'CPF/CNPJ' },
-                    issuer: { id: 'form-checkout__issuer' },
-                },
-                callbacks: {
-                    onFormMounted: (err: any) => { if (err) setError('Erro ao carregar campos do cartão'); },
-                    onSubmit: async (event: any) => {
-                        event.preventDefault();
-                        const data = cardFormRef.current.getCardFormData();
-                        await handleCardSubmit(data);
-                    },
-                },
-            });
-        };
-
-        if (window.MercadoPago) {
-            initCardForm();
-        } else if (!mpScriptLoadedRef.current) {
-            mpScriptLoadedRef.current = true;
-            const script = document.createElement('script');
-            script.src = 'https://sdk.mercadopago.com/js/v2';
-            script.onload = () => initCardForm();
-            script.onerror = () => setError('Erro ao carregar SDK de pagamento');
-            document.head.appendChild(script);
-        }
-    }, [checkoutStep]);
+        const bin = cardData.number.replace(/\s/g, '').substring(0, 6);
+        if (bin.length < 6) { setInstallmentOptions([]); return; }
+        const amount = Math.max(1, total - (appliedCoupon?.discount_amount || 0));
+        setFetchingInstallments(true);
+        fetch(`/api/mercadopago/get-installments?bin=${bin}&amount=${amount}`)
+            .then(r => r.json())
+            .then(data => {
+                setInstallmentOptions(data.installments || []);
+                setCardPaymentMethodId(data.paymentMethodId || '');
+                setCardIssuerId(data.issuerId || '');
+                if ((data.installments || []).length > 0) setSelectedInstallments(1);
+            })
+            .catch(() => {})
+            .finally(() => setFetchingInstallments(false));
+    }, [cardData.number, total, appliedCoupon]);
 
     // Recompute total when payment method changes (PIX vs card pricing)
     useEffect(() => {
@@ -595,12 +566,18 @@ function CheckoutPageContent() {
         }, 3000);
     }
 
-    async function handleCardSubmit(formData: any) {
+    async function handleCardSubmit(e: React.FormEvent) {
+        e.preventDefault();
         setProcessing(true);
         setError(null);
-        const { token, installments, paymentMethodId, issuerId } = formData;
         const order = currentOrder;
-        if (!order || !token) { setError('Erro ao processar cartão. Tente novamente.'); setProcessing(false); return; }
+        if (!order) { setError('Erro ao processar. Tente novamente.'); setProcessing(false); return; }
+        const [expMonth, expYear] = cardData.expiry.split('/');
+        if (!expMonth || !expYear || cardData.number.replace(/\s/g, '').length < 13 || cardData.cvv.length < 3) {
+            setError('Preencha todos os dados do cartão corretamente.');
+            setProcessing(false);
+            return;
+        }
 
         const finalTotal = Math.max(0, total - (appliedCoupon?.discount_amount || 0));
 
@@ -623,16 +600,20 @@ function CheckoutPageContent() {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                orderId: order.id,
-                orderNumber: order.order_number,
-                amount: finalTotal,
-                token,
-                installments,
-                paymentMethodId,
-                issuerId,
-                payerEmail: customerData.email,
-                payerCpf: cpf.replace(/\D/g, ''),
-                payerName: customerData.name,
+                orderId:          order.id,
+                orderNumber:      order.order_number,
+                amount:           finalTotal,
+                cardNumber:       cardData.number.replace(/\s/g, ''),
+                expirationMonth:  expMonth.padStart(2, '0'),
+                expirationYear:   expYear.length === 2 ? `20${expYear}` : expYear,
+                securityCode:     cardData.cvv,
+                cardholderName:   cardData.name || customerData.name,
+                installments:     selectedInstallments,
+                paymentMethodId:  cardPaymentMethodId,
+                issuerId:         cardIssuerId,
+                payerEmail:       customerData.email,
+                payerCpf:         cpf.replace(/\D/g, ''),
+                payerName:        customerData.name,
             }),
         });
 
@@ -1035,49 +1016,84 @@ function CheckoutPageContent() {
                         <div className={styles.formSection}>
                             <h2 className={styles.sectionTitle}>Dados do Cartão</h2>
 
-                            <form id="form-checkout" className={styles.cardForm}>
+                            <form onSubmit={handleCardSubmit} className={styles.cardForm}>
                                 <div className={styles.formGroup}>
                                     <label className={styles.label}>Número do cartão</label>
-                                    <div id="form-checkout__cardNumber" className={styles.mpField}></div>
+                                    <input
+                                        type="text" inputMode="numeric" className={styles.input}
+                                        placeholder="0000 0000 0000 0000" maxLength={19}
+                                        value={cardData.number}
+                                        onChange={e => {
+                                            const v = e.target.value.replace(/\D/g, '').substring(0, 16);
+                                            setCardData(p => ({ ...p, number: v.replace(/(.{4})/g, '$1 ').trim() }));
+                                        }}
+                                    />
                                 </div>
 
                                 <div className={styles.formRow2}>
                                     <div className={styles.formGroup}>
                                         <label className={styles.label}>Validade</label>
-                                        <div id="form-checkout__expirationDate" className={styles.mpField}></div>
+                                        <input
+                                            type="text" inputMode="numeric" className={styles.input}
+                                            placeholder="MM/AA" maxLength={5}
+                                            value={cardData.expiry}
+                                            onChange={e => {
+                                                let v = e.target.value.replace(/\D/g, '').substring(0, 4);
+                                                if (v.length > 2) v = v.substring(0, 2) + '/' + v.substring(2);
+                                                setCardData(p => ({ ...p, expiry: v }));
+                                            }}
+                                        />
                                     </div>
                                     <div className={styles.formGroup}>
                                         <label className={styles.label}>CVV</label>
-                                        <div id="form-checkout__securityCode" className={styles.mpField}></div>
+                                        <input
+                                            type="text" inputMode="numeric" className={styles.input}
+                                            placeholder="CVV" maxLength={4}
+                                            value={cardData.cvv}
+                                            onChange={e => setCardData(p => ({ ...p, cvv: e.target.value.replace(/\D/g, '').substring(0, 4) }))}
+                                        />
                                     </div>
                                 </div>
 
                                 <div className={styles.formGroup}>
                                     <label className={styles.label}>Nome no cartão</label>
-                                    <input type="text" id="form-checkout__cardholderName" className={styles.input} placeholder="Como está no cartão" defaultValue={customerData.name} />
-                                </div>
-
-                                <div className={styles.formGroup} style={{ display: 'none' }}>
-                                    <select id="form-checkout__identificationType"></select>
-                                </div>
-
-                                <div className={styles.formGroup} style={{ display: 'none' }}>
-                                    <select id="form-checkout__issuer"></select>
+                                    <input
+                                        type="text" className={styles.input}
+                                        placeholder="Como está no cartão"
+                                        value={cardData.name || customerData.name}
+                                        onChange={e => setCardData(p => ({ ...p, name: e.target.value.toUpperCase() }))}
+                                    />
                                 </div>
 
                                 <div className={styles.formRow2}>
                                     <div className={styles.formGroup}>
                                         <label className={styles.label}>CPF do titular</label>
-                                        <input type="text" id="form-checkout__identificationNumber" className={styles.input} placeholder="000.000.000-00" defaultValue={cpf} />
+                                        <input
+                                            type="text" className={styles.input}
+                                            placeholder="000.000.000-00"
+                                            value={cpf}
+                                            onChange={e => setCpf(formatCpf(e.target.value))}
+                                        />
                                     </div>
                                     <div className={styles.formGroup}>
                                         <label className={styles.label}>Parcelas</label>
-                                        <select id="form-checkout__installments" className={styles.input}></select>
+                                        <select
+                                            className={styles.input}
+                                            value={selectedInstallments}
+                                            onChange={e => setSelectedInstallments(Number(e.target.value))}
+                                            disabled={installmentOptions.length === 0}
+                                        >
+                                            {installmentOptions.length === 0 ? (
+                                                <option value={1}>{fetchingInstallments ? 'Carregando...' : 'Digite o número do cartão'}</option>
+                                            ) : (
+                                                installmentOptions.map(opt => (
+                                                    <option key={opt.installments} value={opt.installments}>
+                                                        {opt.recommended_message}
+                                                    </option>
+                                                ))
+                                            )}
+                                        </select>
                                     </div>
-                                </div>
-
-                                <div className={styles.formGroup} style={{ display: 'none' }}>
-                                    <input type="email" id="form-checkout__cardholderEmail" defaultValue={customerData.email} />
                                 </div>
 
                                 {error && (
@@ -1094,7 +1110,7 @@ function CheckoutPageContent() {
 
                             <button
                                 className={styles.backLinkBtn}
-                                onClick={() => { cardFormRef.current = null; setCheckoutStep('details'); setError(null); }}
+                                onClick={() => { setCheckoutStep('details'); setError(null); setCardData({ number: '', expiry: '', cvv: '', name: '' }); }}
                             >
                                 Voltar
                             </button>

@@ -3,10 +3,48 @@ import { NextResponse } from 'next/server';
 export async function POST(request: Request) {
     try {
         const {
-            orderId, orderNumber, amount, token, installments,
-            paymentMethodId, issuerId,
+            orderId, orderNumber, amount,
+            // raw card data (new flow — no SDK iframe)
+            cardNumber, expirationMonth, expirationYear, securityCode, cardholderName,
+            // pre-tokenized (legacy, kept for compat)
+            token: existingToken,
+            installments, paymentMethodId, issuerId,
             payerEmail, payerCpf, payerName,
         } = await request.json();
+
+        // Tokenize card on backend if raw data was provided
+        let token = existingToken;
+        if (!token && cardNumber) {
+            const tokenRes = await fetch('https://api.mercadopago.com/v1/card_tokens', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${process.env.MERCADOPAGO_ACCESS_TOKEN}`,
+                },
+                body: JSON.stringify({
+                    card_number:      cardNumber.replace(/\s/g, ''),
+                    expiration_year:  expirationYear,
+                    expiration_month: expirationMonth,
+                    security_code:    securityCode,
+                    cardholder: {
+                        name: cardholderName,
+                        identification: {
+                            type:   'CPF',
+                            number: (payerCpf || '').replace(/\D/g, ''),
+                        },
+                    },
+                }),
+            });
+            const tokenData = await tokenRes.json();
+            if (!tokenRes.ok || !tokenData.id) {
+                console.error('MP tokenization error:', tokenData);
+                return NextResponse.json(
+                    { error: 'Dados do cartão inválidos. Verifique e tente novamente.' },
+                    { status: 400 }
+                );
+            }
+            token = tokenData.id;
+        }
 
         const nameParts = (payerName || 'Cliente').trim().split(' ');
         const firstName = nameParts[0];
