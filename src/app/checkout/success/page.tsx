@@ -51,25 +51,10 @@ function CheckoutSuccessPageContent() {
 
                 setOrder(orderData);
 
-                // Se comprador não tem conta, envia magic link automaticamente
-                if (!user && orderData.participant_email) {
-                    const redirectTo = `${window.location.origin}/auth/callback?next=/dashboard/tickets`;
-                    const { error: otpError } = await supabase.auth.signInWithOtp({
-                        email: orderData.participant_email,
-                        options: { emailRedirectTo: redirectTo },
-                    });
-                    if (!otpError) {
-                        setMagicLinkSent(true);
-                    }
-                }
-
                 // Load tickets
                 const { data: ticketsData } = await supabase
                     .from('tickets')
-                    .select(`
-                        *,
-                        event_ticket_types(name)
-                    `)
+                    .select(`*, event_ticket_types(name)`)
                     .eq('order_id', orderId)
                     .order('created_at', { ascending: true });
 
@@ -77,6 +62,7 @@ function CheckoutSuccessPageContent() {
                 setTickets(ticketsList);
 
                 // Check for pending forms
+                let pendingFormsList: any[] = [];
                 if (ticketsList.length > 0) {
                     const ticketIds = ticketsList.map(t => t.id);
                     const { data: formResponses } = await supabase
@@ -86,8 +72,23 @@ function CheckoutSuccessPageContent() {
                         .eq('status', 'pending');
 
                     if (formResponses && formResponses.length > 0) {
+                        pendingFormsList = formResponses;
                         setPendingForms(formResponses);
                     }
+                }
+
+                // Envia magic link após saber se há formulários pendentes
+                if (!user && orderData.participant_email) {
+                    const firstPendingTicketId = pendingFormsList[0]?.ticket_id;
+                    const nextPath = firstPendingTicketId
+                        ? `/form/${firstPendingTicketId}`
+                        : '/dashboard/tickets';
+                    const redirectTo = `${window.location.origin}/auth/callback?next=${nextPath}`;
+                    const { error: otpError } = await supabase.auth.signInWithOtp({
+                        email: orderData.participant_email,
+                        options: { emailRedirectTo: redirectTo },
+                    });
+                    if (!otpError) setMagicLinkSent(true);
                 }
             } catch (err: any) {
                 console.error('Error loading order data:', err);
@@ -233,7 +234,9 @@ function CheckoutSuccessPageContent() {
                         }}>
                             <span style={{ fontSize: 20, flexShrink: 0 }}>✉️</span>
                             <p style={{ margin: 0, fontSize: 13, color: '#0369a1', lineHeight: 1.5 }}>
-                                Enviamos um link para <strong>{order.participant_email}</strong> — clique nele para acessar seus ingressos a qualquer hora, sem precisar de senha.
+                                Enviamos um link para <strong>{order.participant_email}</strong> — clique nele para{' '}
+                                {pendingForms.length > 0 ? 'preencher o formulário do evento' : 'acessar seus ingressos'}{' '}
+                                a qualquer hora, sem precisar de senha.
                             </p>
                         </div>
                     )}
