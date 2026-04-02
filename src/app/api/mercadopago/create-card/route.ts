@@ -46,6 +46,27 @@ export async function POST(request: Request) {
             token = tokenData.id;
         }
 
+        // If paymentMethodId wasn't resolved on the frontend, fetch it from MP using the BIN
+        let resolvedPaymentMethodId = paymentMethodId;
+        let resolvedIssuerId = issuerId;
+        if (!resolvedPaymentMethodId && cardNumber) {
+            const bin = cardNumber.replace(/\s/g, '').substring(0, 6);
+            try {
+                const instRes = await fetch(
+                    `https://api.mercadopago.com/v1/payment_methods/installments?bin=${bin}&amount=${amount}`,
+                    { headers: { Authorization: `Bearer ${process.env.MERCADOPAGO_ACCESS_TOKEN}` } }
+                );
+                if (instRes.ok) {
+                    const instData = await instRes.json();
+                    const first = Array.isArray(instData) ? instData[0] : null;
+                    if (first) {
+                        resolvedPaymentMethodId = first.id;
+                        resolvedIssuerId = String(first.issuer?.id || '');
+                    }
+                }
+            } catch { /* use empty fallback */ }
+        }
+
         const nameParts = (payerName || 'Cliente').trim().split(' ');
         const firstName = nameParts[0];
         const lastName = nameParts.slice(1).join(' ') || firstName;
@@ -54,7 +75,7 @@ export async function POST(request: Request) {
             transaction_amount: Math.round(parseFloat(amount) * 100) / 100,
             token,
             installments: parseInt(installments) || 1,
-            payment_method_id: paymentMethodId,
+            payment_method_id: resolvedPaymentMethodId,
             payer: {
                 email: payerEmail,
                 first_name: firstName,
@@ -68,7 +89,7 @@ export async function POST(request: Request) {
             notification_url: `${process.env.NEXT_PUBLIC_SITE_URL}/api/mercadopago/webhook`,
         };
 
-        if (issuerId) body.issuer_id = parseInt(issuerId);
+        if (resolvedIssuerId) body.issuer_id = parseInt(resolvedIssuerId);
 
         const response = await fetch('https://api.mercadopago.com/v1/payments', {
             method: 'POST',
