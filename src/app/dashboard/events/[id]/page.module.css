@@ -391,3 +391,19 @@
     outline: none;
     border-color: #4A90E2;
 }
+
+.filterSelect {
+    height: 36px;
+    padding: 0 0.75rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    font-size: 13px;
+    color: #374151;
+    background: white;
+    cursor: pointer;
+    font-family: inherit;
+}
+.filterSelect:focus {
+    outline: none;
+    border-color: #94a3b8;
+}

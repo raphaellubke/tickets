@@ -24,6 +24,7 @@ interface Participant {
     participant_email: string;
     participant_phone: string | null;
     payment_method: string | null;
+    payment_status: string;
     total_amount: number;
     paid_at: string | null;
     order_number: string;
@@ -242,6 +243,9 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
 
     // Waitlist state
     const [filterStatus, setFilterStatus] = useState('');
+    const [filterPaymentStatus, setFilterPaymentStatus] = useState('');
+    const [filterPaymentMethod, setFilterPaymentMethod] = useState('');
+    const [filterFormStatus, setFilterFormStatus] = useState('');
 
     useEffect(() => {
         if (user && eventId) fetchData();
@@ -284,12 +288,12 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
                 // Fetch participants (paid orders with tickets)
                 supabase.from('orders').select(`
                     id, participant_name, participant_email, participant_phone,
-                    payment_method, total_amount, paid_at, order_number,
+                    payment_method, payment_status, total_amount, paid_at, order_number,
                     tickets (
                         id, ticket_code, status,
                         event_ticket_types ( name )
                     )
-                `).eq('event_id', eventId).eq('payment_status', 'paid').order('paid_at', { ascending: false }),
+                `).eq('event_id', eventId).order('paid_at', { ascending: false }),
             ]);
 
             const sold = ticketsData?.length ?? 0;
@@ -456,6 +460,9 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
     }
 
     const filteredParticipants = participants.filter(p => {
+        if (filterPaymentStatus && p.payment_status !== filterPaymentStatus) return false;
+        if (filterPaymentMethod && p.payment_method !== filterPaymentMethod) return false;
+        if (filterFormStatus && p.formStatus !== filterFormStatus) return false;
         if (!participantSearch) return true;
         const q = participantSearch.toLowerCase();
         return (p.participant_name || '').toLowerCase().includes(q) ||
@@ -630,6 +637,36 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
                                     )}
                                 </>
                             )}
+                            <select
+                                className={styles.filterSelect}
+                                value={filterPaymentStatus}
+                                onChange={e => setFilterPaymentStatus(e.target.value)}
+                            >
+                                <option value="">Todos os status</option>
+                                <option value="paid">Pago</option>
+                                <option value="pending">Pendente</option>
+                                <option value="cancelled">Cancelado</option>
+                            </select>
+                            <select
+                                className={styles.filterSelect}
+                                value={filterPaymentMethod}
+                                onChange={e => setFilterPaymentMethod(e.target.value)}
+                            >
+                                <option value="">Todos os métodos</option>
+                                <option value="pix">PIX</option>
+                                <option value="card">Cartão</option>
+                                <option value="credit_card">Cartão</option>
+                            </select>
+                            <select
+                                className={styles.filterSelect}
+                                value={filterFormStatus}
+                                onChange={e => setFilterFormStatus(e.target.value)}
+                            >
+                                <option value="">Todos os formulários</option>
+                                <option value="all_completed">Preenchido</option>
+                                <option value="all_pending">Pendente</option>
+                                <option value="no_form">Sem formulário</option>
+                            </select>
                             <div className={styles.searchBox}>
                                 <svg className={styles.searchIcon} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                     <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
@@ -669,6 +706,7 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
                                     <th>Participante</th>
                                     <th>Telefone</th>
                                     <th>Pagamento</th>
+                                    <th>Status</th>
                                     <th>Ingressos</th>
                                     <th>Formulário</th>
                                     <th></th>
@@ -705,6 +743,23 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
                                             }}>
                                                 {paymentLabel[p.payment_method || ''] || p.payment_method || '—'}
                                             </span>
+                                        </td>
+                                        <td>
+                                            {(() => {
+                                                const s = p.payment_status;
+                                                const cfg: Record<string, { label: string; bg: string; color: string }> = {
+                                                    paid:      { label: 'Pago',      bg: '#dcfce7', color: '#166534' },
+                                                    pending:   { label: 'Pendente',  bg: '#fef9c3', color: '#854d0e' },
+                                                    cancelled: { label: 'Cancelado', bg: '#fee2e2', color: '#991b1b' },
+                                                    refunded:  { label: 'Reembolso', bg: '#f3f4f6', color: '#374151' },
+                                                };
+                                                const c = cfg[s] || { label: s || '—', bg: '#f3f4f6', color: '#6b7280' };
+                                                return (
+                                                    <span style={{ fontSize: '11px', fontWeight: 600, padding: '2px 8px', borderRadius: '20px', background: c.bg, color: c.color }}>
+                                                        {c.label}
+                                                    </span>
+                                                );
+                                            })()}
                                         </td>
                                         <td style={{ fontSize: '13px', color: '#374151' }}>
                                             {p.tickets?.length || 0}x
