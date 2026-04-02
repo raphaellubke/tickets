@@ -805,13 +805,95 @@
     gap: 0;
 }
 
-.mpField {
-    height: 44px;
-    border: 1px solid #d1d5db;
-    border-radius: 8px;
-    background: white;
-    transition: border-color 0.2s;
+/* ─── Card preview ─── */
+.cardPreview {
+    background: linear-gradient(135deg, #1e293b 0%, #334155 60%, #1e3a5f 100%);
+    border-radius: 14px;
+    padding: 1.25rem 1.5rem;
+    margin-bottom: 1.5rem;
+    color: white;
+    font-family: 'Courier New', monospace;
+    position: relative;
     overflow: hidden;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.18);
+    min-height: 120px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+}
+.cardPreview::before {
+    content: '';
+    position: absolute;
+    top: -30px; right: -30px;
+    width: 130px; height: 130px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.06);
+}
+.cardPreview::after {
+    content: '';
+    position: absolute;
+    bottom: -40px; right: 30px;
+    width: 100px; height: 100px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.04);
+}
+.cardPreviewNumber {
+    font-size: 1.1rem;
+    letter-spacing: 0.15em;
+    color: rgba(255,255,255,0.9);
+    margin-bottom: 0.75rem;
+}
+.cardPreviewBottom {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+}
+.cardPreviewLabel {
+    font-size: 0.6rem;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.5);
+    letter-spacing: 0.08em;
+    margin-bottom: 2px;
+}
+.cardPreviewValue {
+    font-size: 0.8rem;
+    color: rgba(255,255,255,0.85);
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+}
+.cardBrandBadge {
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    padding: 3px 8px;
+    border-radius: 4px;
+    background: rgba(255,255,255,0.15);
+    color: white;
+    text-transform: uppercase;
+    align-self: flex-start;
+}
+
+/* ─── Card number input with brand icon ─── */
+.cardNumberWrapper {
+    position: relative;
+}
+.cardNumberWrapper .input {
+    padding-right: 3.5rem;
+}
+.cardBrandIcon {
+    position: absolute;
+    right: 0.75rem;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: #6b7280;
+    letter-spacing: 0.05em;
+    pointer-events: none;
+    padding: 2px 6px;
+    border: 1px solid #e5e7eb;
+    border-radius: 4px;
+    background: #f9fafb;
 }
 
 /* ─── Back link button ─── */

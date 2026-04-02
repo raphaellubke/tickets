@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, Suspense } from 'react';
+import { useState, useEffect, useRef, useCallback, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/context/AuthContext';
@@ -73,7 +73,10 @@ function CheckoutPageContent() {
         qrCode: string; qrCodeBase64: string; paymentId: string; dbPaymentId: string;
     } | null>(null);
     const [pixCopied, setPixCopied] = useState(false);
-    const pixPollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    const pixPollingRef   = useRef<ReturnType<typeof setInterval> | null>(null);
+    const expiryRef       = useRef<HTMLInputElement>(null);
+    const cvvRef          = useRef<HTMLInputElement>(null);
+    const cardNameRef     = useRef<HTMLInputElement>(null);
 
     // Card form state (no MP SDK iframes)
     const [cardData, setCardData] = useState({ number: '', expiry: '', cvv: '', name: '' });
@@ -645,6 +648,21 @@ function CheckoutPageContent() {
         }
     }
 
+    const detectBrand = useCallback((num: string): string => {
+        const n = num.replace(/\s/g, '');
+        if (/^4/.test(n)) return 'Visa';
+        if (/^(5[1-5]|2[2-7])/.test(n)) return 'Mastercard';
+        if (/^3[47]/.test(n)) return 'Amex';
+        if (/^(636368|438935|504175|451416|636297|5067|4576|4011)/.test(n)) return 'Elo';
+        if (/^606282/.test(n)) return 'Hipercard';
+        return '';
+    }, []);
+
+    const cardBrand = detectBrand(cardData.number);
+    const displayNumber = cardData.number || '•••• •••• •••• ••••';
+    const displayExpiry = cardData.expiry || '••/••';
+    const displayName   = (cardData.name || customerData.name || 'NOME NO CARTÃO').toUpperCase();
+
     const formatPrice = (price: number) => {
         if (price === 0) return 'Gratuito';
         return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(price);
@@ -1017,23 +1035,46 @@ function CheckoutPageContent() {
                             <h2 className={styles.sectionTitle}>Dados do Cartão</h2>
 
                             <form onSubmit={handleCardSubmit} className={styles.cardForm}>
+
+                                {/* Card preview */}
+                                <div className={styles.cardPreview}>
+                                    {cardBrand && <span className={styles.cardBrandBadge}>{cardBrand}</span>}
+                                    <div className={styles.cardPreviewNumber}>{displayNumber}</div>
+                                    <div className={styles.cardPreviewBottom}>
+                                        <div>
+                                            <div className={styles.cardPreviewLabel}>Nome</div>
+                                            <div className={styles.cardPreviewValue}>{displayName}</div>
+                                        </div>
+                                        <div>
+                                            <div className={styles.cardPreviewLabel}>Validade</div>
+                                            <div className={styles.cardPreviewValue}>{displayExpiry}</div>
+                                        </div>
+                                    </div>
+                                </div>
+
                                 <div className={styles.formGroup}>
                                     <label className={styles.label}>Número do cartão</label>
-                                    <input
-                                        type="text" inputMode="numeric" className={styles.input}
-                                        placeholder="0000 0000 0000 0000" maxLength={19}
-                                        value={cardData.number}
-                                        onChange={e => {
-                                            const v = e.target.value.replace(/\D/g, '').substring(0, 16);
-                                            setCardData(p => ({ ...p, number: v.replace(/(.{4})/g, '$1 ').trim() }));
-                                        }}
-                                    />
+                                    <div className={styles.cardNumberWrapper}>
+                                        <input
+                                            type="text" inputMode="numeric" className={styles.input}
+                                            placeholder="0000 0000 0000 0000" maxLength={19}
+                                            value={cardData.number}
+                                            onChange={e => {
+                                                const v = e.target.value.replace(/\D/g, '').substring(0, 16);
+                                                const formatted = v.replace(/(.{4})/g, '$1 ').trim();
+                                                setCardData(p => ({ ...p, number: formatted }));
+                                                if (v.length === 16) expiryRef.current?.focus();
+                                            }}
+                                        />
+                                        {cardBrand && <span className={styles.cardBrandIcon}>{cardBrand}</span>}
+                                    </div>
                                 </div>
 
                                 <div className={styles.formRow2}>
                                     <div className={styles.formGroup}>
                                         <label className={styles.label}>Validade</label>
                                         <input
+                                            ref={expiryRef}
                                             type="text" inputMode="numeric" className={styles.input}
                                             placeholder="MM/AA" maxLength={5}
                                             value={cardData.expiry}
@@ -1041,16 +1082,22 @@ function CheckoutPageContent() {
                                                 let v = e.target.value.replace(/\D/g, '').substring(0, 4);
                                                 if (v.length > 2) v = v.substring(0, 2) + '/' + v.substring(2);
                                                 setCardData(p => ({ ...p, expiry: v }));
+                                                if (v.length === 5) cvvRef.current?.focus();
                                             }}
                                         />
                                     </div>
                                     <div className={styles.formGroup}>
                                         <label className={styles.label}>CVV</label>
                                         <input
+                                            ref={cvvRef}
                                             type="text" inputMode="numeric" className={styles.input}
                                             placeholder="CVV" maxLength={4}
                                             value={cardData.cvv}
-                                            onChange={e => setCardData(p => ({ ...p, cvv: e.target.value.replace(/\D/g, '').substring(0, 4) }))}
+                                            onChange={e => {
+                                                const v = e.target.value.replace(/\D/g, '').substring(0, 4);
+                                                setCardData(p => ({ ...p, cvv: v }));
+                                                if (v.length >= 3) cardNameRef.current?.focus();
+                                            }}
                                         />
                                     </div>
                                 </div>
@@ -1058,6 +1105,7 @@ function CheckoutPageContent() {
                                 <div className={styles.formGroup}>
                                     <label className={styles.label}>Nome no cartão</label>
                                     <input
+                                        ref={cardNameRef}
                                         type="text" className={styles.input}
                                         placeholder="Como está no cartão"
                                         value={cardData.name || customerData.name}
