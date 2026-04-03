@@ -17,7 +17,7 @@ export async function POST(request: NextRequest) {
             type: 'recovery',
             email,
             options: {
-                redirectTo: `${SITE_URL}/auth/callback?next=/nova-senha`,
+                redirectTo: `${SITE_URL}/nova-senha`,
             },
         });
 
