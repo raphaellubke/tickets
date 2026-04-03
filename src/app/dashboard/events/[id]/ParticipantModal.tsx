@@ -10,6 +10,7 @@ interface FormAnswerDetail {
         label: string;
         type: string;
         order_index: number;
+        is_couple_field?: boolean | null;
     } | null;
 }
 
@@ -66,14 +67,27 @@ export default function ParticipantModal({ order, eventName, onClose, onPrintPDF
                     let answers: FormAnswerDetail[] = [];
 
                     if (response.status === 'completed') {
-                        const { data: answersData } = await supabase
+                        const { data: rawAnswers } = await supabase
                             .from('form_response_answers')
-                            .select('value, form_fields(label, type, order_index, is_couple_field)')
+                            .select('value, field_id')
                             .eq('response_id', response.id);
 
-                        answers = ((answersData || []) as unknown as FormAnswerDetail[]).sort((a, b) =>
-                            (a.form_fields?.order_index || 0) - (b.form_fields?.order_index || 0)
-                        );
+                        if (rawAnswers && rawAnswers.length > 0) {
+                            const fieldIds = rawAnswers.map((a: any) => a.field_id).filter(Boolean);
+                            const { data: fields } = await supabase
+                                .from('form_fields')
+                                .select('id, label, type, order_index, is_couple_field')
+                                .in('id', fieldIds);
+
+                            const fieldMap = Object.fromEntries((fields || []).map((f: any) => [f.id, f]));
+
+                            answers = rawAnswers.map((a: any) => ({
+                                value: a.value,
+                                form_fields: fieldMap[a.field_id] || null,
+                            })).sort((a, b) =>
+                                (a.form_fields?.order_index || 0) - (b.form_fields?.order_index || 0)
+                            );
+                        }
                     }
 
                     details[response.ticket_id] = {
