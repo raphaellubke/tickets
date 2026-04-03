@@ -207,29 +207,36 @@ function CheckoutSuccessPageContent() {
                         </div>
                     )}
 
-                    {!user && (
-                        <div style={{
-                            background: '#f0f9ff',
-                            border: '1px solid #bae6fd',
-                            borderRadius: 10,
-                            padding: '1rem 1.25rem',
-                            margin: '1.5rem 0',
-                            textAlign: 'center'
-                        }}>
-                            <p style={{ margin: '0 0 12px', fontSize: 13, color: '#0369a1', lineHeight: 1.5 }}>
-                                Crie uma conta com o e-mail <strong>{order.participant_email}</strong> para acessar seus ingressos a qualquer hora.
-                            </p>
-                            <Link
-                                href={`/login?email=${encodeURIComponent(order.participant_email)}`}
-                                style={{
-                                    display: 'inline-block', background: '#0369a1', color: 'white',
-                                    padding: '8px 20px', borderRadius: 8, fontSize: 13, fontWeight: 600,
-                                    textDecoration: 'none'
-                                }}
-                            >
-                                Acessar meus ingressos
-                            </Link>
-                        </div>
+                    {tickets.length > 0 && (
+                        pendingForms.length > 0 ? (
+                            <div style={{
+                                background: '#fff7ed', border: '1px solid #fed7aa',
+                                borderRadius: 10, padding: '1rem 1.25rem', margin: '1.5rem 0', textAlign: 'center'
+                            }}>
+                                <p style={{ margin: '0 0 12px', fontSize: 13, color: '#9a3412', lineHeight: 1.5, fontWeight: 600 }}>
+                                    Você precisa preencher o formulário do evento!
+                                </p>
+                                <Link
+                                    href={`/form/${pendingForms[0].ticket_id}`}
+                                    style={{
+                                        display: 'inline-block', background: '#ea580c', color: 'white',
+                                        padding: '8px 20px', borderRadius: 8, fontSize: 13, fontWeight: 600,
+                                        textDecoration: 'none'
+                                    }}
+                                >
+                                    Preencher formulário agora →
+                                </Link>
+                            </div>
+                        ) : (
+                            <div style={{
+                                background: '#f0fdf4', border: '1px solid #bbf7d0',
+                                borderRadius: 10, padding: '1rem 1.25rem', margin: '1.5rem 0', textAlign: 'center'
+                            }}>
+                                <p style={{ margin: 0, fontSize: 13, color: '#166534', lineHeight: 1.5 }}>
+                                    ✅ Formulário já preenchido. Tudo certo!
+                                </p>
+                            </div>
+                        )
                     )}
 
                     <div style={{
