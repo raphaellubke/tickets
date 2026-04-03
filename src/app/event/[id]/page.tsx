@@ -278,6 +278,47 @@ export default function EventDetails({ params }: { params: Promise<{ id: string 
         fetchEventData();
     }, [eventId]);
 
+    // Poll availability every 30 seconds so reservations and purchases reflect without manual refresh
+    useEffect(() => {
+        if (!eventId) return;
+
+        async function refreshAvailability() {
+            // Refresh quantity_sold from DB
+            const { data: typesData } = await supabase
+                .from('event_ticket_types')
+                .select('id, quantity_available, quantity_sold')
+                .eq('event_id', eventId);
+
+            if (typesData) {
+                setTicketGroups(prev => prev.map(group => ({
+                    ...group,
+                    ticketTypes: group.ticketTypes.map(type => {
+                        const fresh = typesData.find(t => t.id === type.id);
+                        if (!fresh) return type;
+                        return {
+                            ...type,
+                            quantityAvailable: fresh.quantity_available || 0,
+                            quantitySold: fresh.quantity_sold || 0,
+                        };
+                    }),
+                })));
+            }
+
+            // Refresh active reservations
+            const { data: reservations } = await supabase
+                .rpc('get_reserved_counts', { p_event_id: eventId });
+            if (reservations) {
+                const counts: Record<string, number> = {};
+                (reservations as { ticket_type_id: string; reserved_count: number }[])
+                    .forEach(r => { counts[r.ticket_type_id] = r.reserved_count; });
+                setReservedCounts(counts);
+            }
+        }
+
+        const interval = setInterval(refreshAvailability, 30_000);
+        return () => clearInterval(interval);
+    }, [eventId]);
+
     const formatPrice = (price: number) => {
         if (price === 0) return 'Gratuito';
         return new Intl.NumberFormat('pt-BR', {
