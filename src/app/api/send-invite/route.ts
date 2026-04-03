@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/server';
 
 export async function POST(request: NextRequest) {
     try {
@@ -11,16 +11,13 @@ export async function POST(request: NextRequest) {
 
         const origin = (process.env.NEXT_PUBLIC_SITE_URL || '').replace(/\/$/, '');
         const nextPath = `/invite/accept?org=${orgId}&role=${role}&email=${encodeURIComponent(email)}`;
-        const emailRedirectTo = `${origin}/auth/callback?next=${encodeURIComponent(nextPath)}`;
+        const redirectTo = `${origin}/auth/callback?next=${encodeURIComponent(nextPath)}`;
 
-        const supabase = await createClient();
+        const supabaseAdmin = createAdminClient();
 
-        const { error } = await supabase.auth.signInWithOtp({
-            email,
-            options: {
-                emailRedirectTo,
-                shouldCreateUser: true,
-            },
+        // inviteUserByEmail generates a link valid for 7 days (vs 1h for OTP magic links)
+        const { error } = await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
+            redirectTo,
         });
 
         if (error) {
@@ -28,7 +25,6 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({
                 success: false,
                 emailSent: false,
-                inviteUrl: emailRedirectTo,
                 error: error.message,
             }, { status: 500 });
         }

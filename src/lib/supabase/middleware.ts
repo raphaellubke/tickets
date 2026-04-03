@@ -38,6 +38,16 @@ export async function updateSession(request: NextRequest) {
     } = await supabase.auth.getUser()
 
     const pathname = request.nextUrl.pathname
+    const searchParams = request.nextUrl.searchParams
+
+    // Redirect Supabase auth errors (expired OTP, invalid link) to login page
+    if (pathname === '/' && searchParams.get('error')) {
+        const url = request.nextUrl.clone()
+        url.pathname = '/login'
+        url.search = '?error=link_invalido'
+        return NextResponse.redirect(url)
+    }
+
     const isProtected =
         pathname.startsWith('/dashboard') ||
         pathname.startsWith('/meus-ingressos')
