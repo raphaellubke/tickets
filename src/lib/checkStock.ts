@@ -13,7 +13,7 @@ export async function checkOrderStock(orderId: string): Promise<string | null> {
 
     const { data: items, error } = await supabase
         .from('order_items')
-        .select('quantity, ticket_type_id, event_ticket_types(name, max_quantity, quantity_sold)')
+        .select('quantity, ticket_type_id, event_ticket_types(name, quantity_available, quantity_sold)')
         .eq('order_id', orderId);
 
     if (error || !items) return 'Erro ao verificar disponibilidade de ingressos.';
@@ -22,7 +22,7 @@ export async function checkOrderStock(orderId: string): Promise<string | null> {
         const type = item.event_ticket_types as any;
         if (!type) continue;
 
-        const maxQty = type.max_quantity ?? null;
+        const maxQty = type.quantity_available ?? null;
         const sold = type.quantity_sold ?? 0;
 
         if (maxQty !== null && sold + item.quantity > maxQty) {
