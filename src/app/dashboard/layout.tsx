@@ -48,21 +48,11 @@ export default function DashboardLayout({
 
                 let member = data?.[0];
 
-                // If not found by user_id, check for pending invite by email and auto-accept
-                if (!member && user.email) {
-                    const { data: pending } = await supabase
-                        .from('organization_members')
-                        .select('id, organization_id, role')
-                        .eq('email', user.email)
-                        .limit(1);
-
-                    if (pending?.[0]) {
-                        await supabase
-                            .from('organization_members')
-                            .update({ user_id: user.id, status: 'active', joined_at: new Date().toISOString() })
-                            .eq('id', pending[0].id);
-                        member = pending[0];
-                    }
+                // If not found by user_id, auto-accept pending invite via server API
+                if (!member) {
+                    const res = await fetch('/api/accept-invite', { method: 'POST' });
+                    const json = await res.json();
+                    if (json.member) member = json.member;
                 }
 
                 if (member) {
