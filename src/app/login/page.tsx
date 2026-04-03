@@ -48,17 +48,19 @@ function LoginPageContent() {
         setLoading(true);
         setError(null);
 
-        const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || window.location.origin).replace(/\/$/, '');
-        const { error } = await supabase.auth.resetPasswordForEmail(email, {
-            redirectTo: `${siteUrl}/auth/callback?next=/nova-senha`,
-        });
-
-        setLoading(false);
-
-        if (error) {
-            setError(error.message);
-        } else {
+        try {
+            const res = await fetch('/api/send-password-reset', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email }),
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || 'Erro ao enviar e-mail');
             setSent(true);
+        } catch (err: any) {
+            setError(err.message);
+        } finally {
+            setLoading(false);
         }
     };
 
