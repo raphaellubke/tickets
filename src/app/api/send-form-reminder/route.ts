@@ -9,7 +9,7 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ success: false, error: 'ticketId and email are required' }, { status: 400 });
         }
 
-        const origin = request.headers.get('origin') || process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
+        const origin = (process.env.NEXT_PUBLIC_SITE_URL || '').replace(/\/$/, '');
         const formUrl = `${origin}/form/${ticketId}`;
 
         // Use Supabase auth OTP to send a magic link to the participant's email

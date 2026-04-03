@@ -398,6 +398,15 @@ export default function FormResponsePage({ params }: { params: Promise<{ ticket_
                     <h1>Tudo certo!</h1>
                     <p>Sua ficha foi enviada com sucesso. Você receberá as informações por e-mail.</p>
                     <button onClick={() => router.push('/')} className={styles.primaryBtn}>Voltar ao início</button>
+                    <div style={{
+                        marginTop: 24, padding: '14px 18px',
+                        background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 10,
+                        fontSize: 13, color: '#6b7280', textAlign: 'left',
+                    }}>
+                        <strong style={{ color: '#111827', display: 'block', marginBottom: 4 }}>📞 Dúvidas ou problemas?</strong>
+                        Entre em contato com <strong>Patrícia Ferraz</strong>:{' '}
+                        <a href="tel:+5517991665571" style={{ color: '#111827', fontWeight: 600 }}>(17) 99166-5571</a>
+                    </div>
                 </div>
             </div>
         );
@@ -526,6 +535,15 @@ export default function FormResponsePage({ params }: { params: Promise<{ ticket_
                     </button>
                 )}
             </footer>
+
+            {/* Contact info */}
+            <div style={{
+                textAlign: 'center', padding: '12px 20px 24px',
+                fontSize: 12, color: '#9ca3af',
+            }}>
+                Dúvidas? Fale com <strong style={{ color: '#6b7280' }}>Patrícia Ferraz</strong>{' '}
+                <a href="tel:+5517991665571" style={{ color: '#6b7280', fontWeight: 600 }}>(17) 99166-5571</a>
+            </div>
         </div>
     );
 }

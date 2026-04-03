@@ -241,6 +241,21 @@ function CheckoutSuccessPageContent() {
                         </div>
                     )}
 
+                    <div style={{
+                        display: 'flex', alignItems: 'center', gap: 12,
+                        background: '#f9fafb', border: '1px solid #e5e7eb',
+                        borderRadius: 12, padding: '1rem 1.25rem', margin: '1.5rem 0',
+                    }}>
+                        <span style={{ fontSize: 22, flexShrink: 0 }}>📞</span>
+                        <div>
+                            <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: '#111827' }}>Dúvidas ou problemas?</p>
+                            <p style={{ margin: '2px 0 0', fontSize: 13, color: '#6b7280' }}>
+                                Entre em contato com <strong>Patrícia Ferraz</strong>:{' '}
+                                <a href="tel:+5517991665571" style={{ color: '#111827', fontWeight: 600 }}>(17) 99166-5571</a>
+                            </p>
+                        </div>
+                    </div>
+
                     <div className={styles.actions}>
                         <Link href="/" className={styles.primaryButton}>
                             Voltar ao Início

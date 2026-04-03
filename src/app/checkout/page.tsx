@@ -86,6 +86,12 @@ function CheckoutPageContent() {
     const [cardIssuerId, setCardIssuerId] = useState('');
     const [fetchingInstallments, setFetchingInstallments] = useState(false);
 
+    // Terms modal
+    const [showTermsModal, setShowTermsModal] = useState(false);
+    const [termsScrolled, setTermsScrolled]   = useState(false);
+    const [termsAccepted, setTermsAccepted]   = useState(false);
+    const termsShownRef = useRef(false);
+
     useEffect(() => {
         async function loadCheckoutData() {
             try {
@@ -447,8 +453,18 @@ function CheckoutPageContent() {
         setAppliedCoupon(null); // reset coupon when price changes
     }, [paymentMethod, checkoutTickets]);
 
+    // Show terms modal once after checkout data loads (paid events only)
+    useEffect(() => {
+        if (!loading && checkoutTickets.length > 0 && !termsShownRef.current) {
+            const hasPaidTicket = checkoutTickets.some(t => t.price > 0);
+            if (hasPaidTicket) { setShowTermsModal(true); termsShownRef.current = true; }
+        }
+    }, [loading, checkoutTickets]);
+
     async function handleContinue() {
         if (!customerData.name || !customerData.email) { setError('Preencha nome e e-mail'); return; }
+        if (!customerData.phone || customerData.phone.replace(/\D/g, '').length < 10) { setError('Informe um telefone válido'); return; }
+        if (!cpf || cpf.replace(/\D/g, '').length < 11) { setError('Informe um CPF válido'); return; }
 
         const finalTotal = Math.max(0, total - (appliedCoupon?.discount_amount || 0));
 
@@ -758,9 +774,101 @@ function CheckoutPageContent() {
         );
     }
 
+    const pixTotal  = checkoutTickets.reduce((s, t) => s + t.price * t.quantity, 0);
+    const cardTotal = checkoutTickets.reduce((s, t) => s + (t.priceCard != null && t.priceCard > 0 ? t.priceCard : t.price) * t.quantity, 0);
+
     return (
         <main className={styles.main}>
             <Header />
+
+            {/* ── Terms & Conditions Modal ── */}
+            {showTermsModal && (
+                <div className={styles.termsOverlay}>
+                    <div className={styles.termsModal}>
+                        <div className={styles.termsModalHeader}>
+                            <h2 className={styles.termsModalTitle}>ATENÇÃO SOBRE DESISTÊNCIA E REEMBOLSO</h2>
+                        </div>
+
+                        <div
+                            className={styles.termsModalBody}
+                            onScroll={(e) => {
+                                const el = e.currentTarget;
+                                if (el.scrollHeight - el.scrollTop - el.clientHeight < 40) setTermsScrolled(true);
+                            }}
+                        >
+                            <p className={styles.termsClause}>
+                                CLÁUSULA SOBRE DESISTÊNCIA, NÃO COMPARECIMENTO E USO DA TAXA DE INSCRIÇÃO
+                            </p>
+
+                            <p>
+                                Declaro estar ciente de que a taxa de inscrição no valor de{' '}
+                                <strong>{formatPrice(pixTotal)} à vista</strong>{' '}
+                                ou{' '}
+                                <strong>{formatPrice(cardTotal)} a prazo</strong>{' '}
+                                refere-se aos custos necessários para a realização do acampamento, incluindo, mas não se
+                                limitando a: alimentação, materiais individuais do campista, materiais de secretaria,
+                                dinâmicas, logística e demais despesas organizacionais.
+                            </p>
+
+                            <p>
+                                Tenho ciência de que tais materiais e serviços são{' '}
+                                <strong>adquiridos e contratados antecipadamente</strong>, a partir da confirmação da
+                                minha inscrição e do pagamento da taxa, considerando minha participação efetiva no
+                                acampamento.
+                            </p>
+
+                            <p>
+                                Dessa forma, em caso de{' '}
+                                <strong>
+                                    desistência, cancelamento, ausência no dia do acampamento ou não comparecimento por
+                                    qualquer motivo, não haverá devolução do valor pago
+                                </strong>
+                                , nem transferência automática da vaga ou do valor para edições futuras do acampamento.
+                            </p>
+
+                            <p>
+                                Declaro ainda que compreendo que as{' '}
+                                <strong>
+                                    vagas do acampamento são limitadas, organizadas por critérios específicos e, quando
+                                    necessário, definidas por sorteio
+                                </strong>
+                                , não sendo possível reservar vagas para edições futuras com base em inscrições
+                                anteriores não aproveitadas.
+                            </p>
+
+                            <p>
+                                Ao prosseguir com a inscrição, afirmo que li, compreendi e estou de pleno acordo com
+                                todas as informações acima.
+                            </p>
+
+                            <div className={styles.termsScrollHint}>
+                                {!termsScrolled && '↓ Role até o final para continuar'}
+                            </div>
+                        </div>
+
+                        <div className={styles.termsModalFooter}>
+                            <label className={`${styles.termsCheckboxLabel} ${!termsScrolled ? styles.termsCheckboxDisabled : ''}`}>
+                                <input
+                                    type="checkbox"
+                                    disabled={!termsScrolled}
+                                    checked={termsAccepted}
+                                    onChange={(e) => setTermsAccepted(e.target.checked)}
+                                    className={styles.termsCheckbox}
+                                />
+                                Li e concordo com os termos acima
+                            </label>
+
+                            <button
+                                className={styles.termsAcceptBtn}
+                                disabled={!termsAccepted}
+                                onClick={() => setShowTermsModal(false)}
+                            >
+                                Aceitar e Continuar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             <div className={styles.container}>
                 {/* Reservation countdown banner */}
@@ -874,11 +982,11 @@ function CheckoutPageContent() {
                             </div>
                             <div className={styles.formRow2}>
                                 <div className={styles.formGroup}>
-                                    <label className={styles.label}>Telefone</label>
+                                    <label className={styles.label}>Telefone *</label>
                                     <input type="tel" value={customerData.phone} onChange={(e) => setCustomerData({ ...customerData, phone: formatPhone(e.target.value) })} className={styles.input} placeholder="(00) 00000-0000" maxLength={15} />
                                 </div>
                                 <div className={styles.formGroup}>
-                                    <label className={styles.label}>CPF</label>
+                                    <label className={styles.label}>CPF *</label>
                                     <input type="text" value={cpf} onChange={(e) => setCpf(formatCpf(e.target.value))} className={styles.input} placeholder="000.000.000-00" maxLength={14} />
                                 </div>
                             </div>
@@ -934,7 +1042,7 @@ function CheckoutPageContent() {
                             <button
                                 className={styles.checkoutButton}
                                 onClick={handleContinue}
-                                disabled={!customerData.name || !customerData.email || processing || (finalTotal > 0 && !paymentMethod)}
+                                disabled={!customerData.name || !customerData.email || !customerData.phone || !cpf || processing || (finalTotal > 0 && !paymentMethod)}
                             >
                                 {processing ? 'Processando...' : finalTotal === 0 ? `Confirmar Inscrição` : `Continuar — ${formatPrice(finalTotal)}`}
                             </button>

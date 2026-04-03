@@ -9,7 +9,7 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ success: false, error: 'email, orgId e role são obrigatórios' }, { status: 400 });
         }
 
-        const origin = request.headers.get('origin') || process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
+        const origin = (process.env.NEXT_PUBLIC_SITE_URL || '').replace(/\/$/, '');
         const nextPath = `/invite/accept?org=${orgId}&role=${role}&email=${encodeURIComponent(email)}`;
         const emailRedirectTo = `${origin}/auth/callback?next=${encodeURIComponent(nextPath)}`;
 

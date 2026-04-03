@@ -27,6 +27,7 @@ interface Participant {
     payment_status: string;
     total_amount: number;
     paid_at: string | null;
+    created_at: string;
     order_number: string;
     tickets: Array<{
         id: string;
@@ -288,7 +289,7 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
                 // Fetch participants (paid orders with tickets)
                 supabase.from('orders').select(`
                     id, participant_name, participant_email, participant_phone,
-                    payment_method, payment_status, total_amount, paid_at, order_number,
+                    payment_method, payment_status, total_amount, paid_at, created_at, order_number,
                     tickets (
                         id, ticket_code, status,
                         event_ticket_types ( name )
@@ -705,6 +706,7 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
                                     </th>
                                     <th>Participante</th>
                                     <th>Telefone</th>
+                                    <th>Data da Compra</th>
                                     <th>Pagamento</th>
                                     <th>Status</th>
                                     <th>Ingressos</th>
@@ -733,6 +735,14 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
                                         </td>
                                         <td style={{ color: '#6b7280', fontSize: '13px' }}>
                                             {p.participant_phone || '—'}
+                                        </td>
+                                        <td style={{ fontSize: '12px', color: '#6b7280', whiteSpace: 'nowrap' }}>
+                                            {p.created_at ? (
+                                                <>
+                                                    <div>{new Date(p.created_at).toLocaleDateString('pt-BR')}</div>
+                                                    <div style={{ fontSize: '11px' }}>{new Date(p.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</div>
+                                                </>
+                                            ) : '—'}
                                         </td>
                                         <td>
                                             <span style={{
