@@ -322,20 +322,12 @@ export default function EventDetails({ params }: { params: Promise<{ id: string 
         return categoryMap[category?.toLowerCase() || ''] || category || 'Evento';
     };
 
-    const handleQuantityChange = (ticketTypeId: string, delta: number, maxAvailable: number) => {
+    const handleSelectTicket = (ticketTypeId: string) => {
         setTicketQuantities(prev => {
-            const current = prev[ticketTypeId] || 0;
-            const newQuantity = Math.max(0, Math.min(maxAvailable, current + delta));
-            
-            if (newQuantity === 0) {
-                const { [ticketTypeId]: _, ...rest } = prev;
-                return rest;
-            }
-            
-            return {
-                ...prev,
-                [ticketTypeId]: newQuantity,
-            };
+            // If already selected, deselect
+            if (prev[ticketTypeId]) return {};
+            // Select this one (radio: only 1 ticket per purchase)
+            return { [ticketTypeId]: 1 };
         });
     };
 
@@ -619,42 +611,16 @@ export default function EventDetails({ params }: { params: Promise<{ id: string 
                                                                 </div>
                                                                 
                                                                 {isAvailable && (
-                                                                    <div className={styles.quantitySection}>
-                                                                        <div className={styles.quantityControls}>
-                                                                            <button
-                                                                                type="button"
-                                                                                className={styles.quantityBtn}
-                                                                                onClick={(e) => {
-                                                                                    e.stopPropagation();
-                                                                                    handleQuantityChange(type.id, -1, maxAvailable);
-                                                                                }}
-                                                                                disabled={currentQuantity === 0}
-                                                                                aria-label="Diminuir quantidade"
-                                                                            >
-                                                                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
-                                                                                    <line x1="5" y1="12" x2="19" y2="12"/>
-                                                                                </svg>
-                                                                            </button>
-                                                                            <span className={styles.quantityValue}>
-                                                                                {currentQuantity}
-                                                                            </span>
-                                                                            <button
-                                                                                type="button"
-                                                                                className={styles.quantityBtn}
-                                                                                onClick={(e) => {
-                                                                                    e.stopPropagation();
-                                                                                    handleQuantityChange(type.id, 1, maxAvailable);
-                                                                                }}
-                                                                                disabled={currentQuantity >= maxAvailable}
-                                                                                aria-label="Aumentar quantidade"
-                                                                            >
-                                                                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
-                                                                                    <line x1="12" y1="5" x2="12" y2="19"/>
-                                                                                    <line x1="5" y1="12" x2="19" y2="12"/>
-                                                                                </svg>
-                                                                            </button>
-                                                                        </div>
-                                                                    </div>
+                                                                    <button
+                                                                        type="button"
+                                                                        className={`${styles.selectTicketBtn} ${currentQuantity > 0 ? styles.selectTicketBtnActive : ''}`}
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            handleSelectTicket(type.id);
+                                                                        }}
+                                                                    >
+                                                                        {currentQuantity > 0 ? '✓ Selecionado' : 'Selecionar'}
+                                                                    </button>
                                                                 )}
                                                             </div>
                                                         );

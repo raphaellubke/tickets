@@ -501,56 +501,29 @@
     white-space: nowrap;
 }
 
-.quantitySection {
-    padding-top: 1rem;
-    border-top: 1px solid #e2e8f0;
-}
-
-.quantityControls {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-    background: #ffffff;
-    border: 1px solid #e2e8f0;
-    border-radius: 12px;
-    padding: 0.5rem;
-    width: fit-content;
-}
-
-.quantityBtn {
-    width: 44px;
-    height: 44px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: var(--primary-color, #3b82f6);
-    color: #ffffff;
-    border: none;
+.selectTicketBtn {
+    margin-top: 1rem;
+    padding: 0.625rem 1.5rem;
+    border: 2px solid var(--primary-color, #3b82f6);
     border-radius: 8px;
+    background: #ffffff;
+    color: var(--primary-color, #3b82f6);
+    font-size: 0.9rem;
+    font-weight: 600;
     cursor: pointer;
-    transition: background 0.15s ease;
-    line-height: 1;
+    transition: background 0.15s ease, color 0.15s ease;
     touch-action: manipulation;
     -webkit-tap-highlight-color: transparent;
 }
 
-.quantityBtn:hover:not(:disabled) {
-    background: var(--primary-hover, #2563eb);
-    transform: scale(1.05);
+.selectTicketBtn:hover {
+    background: var(--primary-color, #3b82f6);
+    color: #ffffff;
 }
 
-.quantityBtn:disabled {
-    opacity: 0.4;
-    cursor: not-allowed;
-    background: #cbd5e1;
-}
-
-.quantityValue {
-    min-width: 40px;
-    text-align: center;
-    font-weight: 700;
-    color: #0f172a;
-    font-size: 1.125rem;
+.selectTicketBtnActive {
+    background: var(--primary-color, #3b82f6);
+    color: #ffffff;
 }
 
 /* Total Section */
@@ -751,13 +724,8 @@
         font-size: 1.25rem;
     }
 
-    .quantitySection {
+    .selectTicketBtn {
         width: 100%;
-    }
-
-    .quantityControls {
-        width: 100%;
-        justify-content: center;
     }
 }
 
