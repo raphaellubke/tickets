@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { checkOrderStock } from '@/lib/checkStock';
 
 export async function POST(request: Request) {
     try {
@@ -11,6 +12,11 @@ export async function POST(request: Request) {
             installments, paymentMethodId, issuerId,
             payerEmail, payerCpf, payerName,
         } = await request.json();
+
+        const stockError = await checkOrderStock(orderId);
+        if (stockError) {
+            return NextResponse.json({ error: stockError }, { status: 400 });
+        }
 
         // Tokenize card on backend if raw data was provided
         let token = existingToken;

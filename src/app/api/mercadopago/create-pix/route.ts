@@ -1,8 +1,14 @@
 import { NextResponse } from 'next/server';
+import { checkOrderStock } from '@/lib/checkStock';
 
 export async function POST(request: Request) {
     try {
         const { orderId, orderNumber, amount, payerEmail, payerName, payerCpf } = await request.json();
+
+        const stockError = await checkOrderStock(orderId);
+        if (stockError) {
+            return NextResponse.json({ error: stockError }, { status: 400 });
+        }
 
         const nameParts = (payerName || 'Cliente').trim().split(' ');
         const firstName = nameParts[0];

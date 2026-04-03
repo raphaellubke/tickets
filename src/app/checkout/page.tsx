@@ -91,6 +91,7 @@ function CheckoutPageContent() {
     const [termsScrolled, setTermsScrolled]   = useState(false);
     const [termsAccepted, setTermsAccepted]   = useState(false);
     const termsShownRef = useRef(false);
+    const termsBodyRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
         async function loadCheckoutData() {
@@ -461,6 +462,18 @@ function CheckoutPageContent() {
         }
     }, [loading, checkoutTickets]);
 
+    // Auto-mark as scrolled if content fits without scrolling
+    useEffect(() => {
+        if (!showTermsModal) return;
+        const timeout = setTimeout(() => {
+            const el = termsBodyRef.current;
+            if (el && el.scrollHeight <= el.clientHeight) {
+                setTermsScrolled(true);
+            }
+        }, 100);
+        return () => clearTimeout(timeout);
+    }, [showTermsModal]);
+
     async function handleContinue() {
         if (!customerData.name || !customerData.email) { setError('Preencha nome e e-mail'); return; }
         if (!customerData.phone || customerData.phone.replace(/\D/g, '').length < 10) { setError('Informe um telefone válido'); return; }
@@ -790,6 +803,7 @@ function CheckoutPageContent() {
                         </div>
 
                         <div
+                            ref={termsBodyRef}
                             className={styles.termsModalBody}
                             onScroll={(e) => {
                                 const el = e.currentTarget;

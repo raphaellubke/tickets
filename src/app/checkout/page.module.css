@@ -1000,7 +1000,7 @@
 
 .termsModalBody {
     flex: 1;
-    overflow-y: auto;
+    overflow-y: scroll;
     padding: 24px 28px;
     font-size: 14px;
     line-height: 1.75;
