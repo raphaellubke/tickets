@@ -46,7 +46,25 @@ export default function DashboardLayout({
                     return;
                 }
 
-                const member = data?.[0];
+                let member = data?.[0];
+
+                // If not found by user_id, check for pending invite by email and auto-accept
+                if (!member && user.email) {
+                    const { data: pending } = await supabase
+                        .from('organization_members')
+                        .select('id, organization_id, role')
+                        .eq('email', user.email)
+                        .limit(1);
+
+                    if (pending?.[0]) {
+                        await supabase
+                            .from('organization_members')
+                            .update({ user_id: user.id, status: 'active', joined_at: new Date().toISOString() })
+                            .eq('id', pending[0].id);
+                        member = pending[0];
+                    }
+                }
+
                 if (member) {
                     setHasOrganization(true);
                     setUserRole(member.role || 'member');
