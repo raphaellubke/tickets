@@ -48,7 +48,7 @@ function LoginPageContent() {
         setLoading(true);
         setError(null);
 
-        const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || window.location.origin;
+        const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || window.location.origin).replace(/\/$/, '');
         const { error } = await supabase.auth.resetPasswordForEmail(email, {
             redirectTo: `${siteUrl}/auth/callback?next=/nova-senha`,
         });
