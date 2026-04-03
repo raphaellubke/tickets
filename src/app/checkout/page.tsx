@@ -1230,7 +1230,7 @@ function CheckoutPageContent() {
                                         ref={cardNameRef}
                                         type="text" className={styles.input}
                                         placeholder="Como está no cartão"
-                                        value={cardData.name || customerData.name}
+                                        value={cardData.name}
                                         onChange={e => setCardData(p => ({ ...p, name: e.target.value.toUpperCase() }))}
                                     />
                                 </div>
