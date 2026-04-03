@@ -20,9 +20,9 @@ function CheckoutSuccessPageContent() {
     const [order, setOrder] = useState<any>(null);
     const [tickets, setTickets] = useState<any[]>([]);
     const [pendingForms, setPendingForms] = useState<any[]>([]);
+    const [hasAnyForm, setHasAnyForm] = useState(false);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    const [hasPendingForms, setHasPendingForms] = useState(false);
 
     useEffect(() => {
         async function loadOrderData() {
@@ -61,20 +61,18 @@ function CheckoutSuccessPageContent() {
                 const ticketsList = ticketsData || [];
                 setTickets(ticketsList);
 
-                // Check for pending forms
-                let pendingFormsList: any[] = [];
+                // Check for forms (any status)
                 if (ticketsList.length > 0) {
                     const ticketIds = ticketsList.map(t => t.id);
-                    const { data: formResponses } = await supabase
+                    const { data: allFormResponses } = await supabase
                         .from('form_responses')
                         .select('id, ticket_id, status')
-                        .in('ticket_id', ticketIds)
-                        .eq('status', 'pending');
+                        .in('ticket_id', ticketIds);
 
-                    if (formResponses && formResponses.length > 0) {
-                        pendingFormsList = formResponses;
-                        setPendingForms(formResponses);
-                        setHasPendingForms(true);
+                    if (allFormResponses && allFormResponses.length > 0) {
+                        setHasAnyForm(true);
+                        const pending = allFormResponses.filter(f => f.status === 'pending');
+                        setPendingForms(pending);
                     }
                 }
             } catch (err: any) {
@@ -207,7 +205,7 @@ function CheckoutSuccessPageContent() {
                         </div>
                     )}
 
-                    {tickets.length > 0 && (
+                    {hasAnyForm && (
                         pendingForms.length > 0 ? (
                             <div style={{
                                 background: '#fff7ed', border: '1px solid #fed7aa',
