@@ -22,7 +22,7 @@ function CheckoutSuccessPageContent() {
     const [pendingForms, setPendingForms] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    const [magicLinkSent, setMagicLinkSent] = useState(false);
+    const [hasPendingForms, setHasPendingForms] = useState(false);
 
     useEffect(() => {
         async function loadOrderData() {
@@ -74,21 +74,8 @@ function CheckoutSuccessPageContent() {
                     if (formResponses && formResponses.length > 0) {
                         pendingFormsList = formResponses;
                         setPendingForms(formResponses);
+                        setHasPendingForms(true);
                     }
-                }
-
-                // Envia magic link após saber se há formulários pendentes
-                if (!user && orderData.participant_email) {
-                    const firstPendingTicketId = pendingFormsList[0]?.ticket_id;
-                    const nextPath = firstPendingTicketId
-                        ? `/form/${firstPendingTicketId}`
-                        : '/meus-ingressos';
-                    const redirectTo = `${window.location.origin}/auth/callback?next=${nextPath}`;
-                    const { error: otpError } = await supabase.auth.signInWithOtp({
-                        email: orderData.participant_email,
-                        options: { emailRedirectTo: redirectTo },
-                    });
-                    if (!otpError) setMagicLinkSent(true);
                 }
             } catch (err: any) {
                 console.error('Error loading order data:', err);
@@ -220,24 +207,28 @@ function CheckoutSuccessPageContent() {
                         </div>
                     )}
 
-                    {magicLinkSent && (
+                    {!user && (
                         <div style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 10,
                             background: '#f0f9ff',
                             border: '1px solid #bae6fd',
                             borderRadius: 10,
                             padding: '1rem 1.25rem',
                             margin: '1.5rem 0',
-                            textAlign: 'left'
+                            textAlign: 'center'
                         }}>
-                            <span style={{ fontSize: 20, flexShrink: 0 }}>✉️</span>
-                            <p style={{ margin: 0, fontSize: 13, color: '#0369a1', lineHeight: 1.5 }}>
-                                Enviamos um link para <strong>{order.participant_email}</strong> — clique nele para{' '}
-                                {pendingForms.length > 0 ? 'preencher o formulário do evento' : 'acessar seus ingressos'}{' '}
-                                a qualquer hora, sem precisar de senha.
+                            <p style={{ margin: '0 0 12px', fontSize: 13, color: '#0369a1', lineHeight: 1.5 }}>
+                                Crie uma conta com o e-mail <strong>{order.participant_email}</strong> para acessar seus ingressos a qualquer hora.
                             </p>
+                            <Link
+                                href={`/login?email=${encodeURIComponent(order.participant_email)}`}
+                                style={{
+                                    display: 'inline-block', background: '#0369a1', color: 'white',
+                                    padding: '8px 20px', borderRadius: 8, fontSize: 13, fontWeight: 600,
+                                    textDecoration: 'none'
+                                }}
+                            >
+                                Acessar meus ingressos
+                            </Link>
                         </div>
                     )}
 
