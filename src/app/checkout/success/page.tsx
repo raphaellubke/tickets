@@ -38,7 +38,7 @@ function CheckoutSuccessPageContent() {
                     .from('orders')
                     .select(`
                         *,
-                        events(name, title, event_date, location)
+                        events(name, title, event_date, location, form_id)
                     `)
                     .eq('id', orderId)
                     .single();
@@ -63,6 +63,18 @@ function CheckoutSuccessPageContent() {
 
                 // Check for forms (any status)
                 if (ticketsList.length > 0) {
+                    const eventFormId = orderData.events?.form_id;
+
+                    // If event has a form, ensure form_responses exist for all tickets
+                    // (handles case where form was linked after ticket purchase)
+                    if (eventFormId) {
+                        await fetch('/api/ensure-form-responses', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ orderId }),
+                        });
+                    }
+
                     const ticketIds = ticketsList.map(t => t.id);
                     const { data: allFormResponses } = await supabase
                         .from('form_responses')
