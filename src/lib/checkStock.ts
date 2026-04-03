@@ -5,9 +5,13 @@ import { createClient } from '@supabase/supabase-js';
  * Returns null if OK, or an error message string if stock is insufficient.
  */
 export async function checkOrderStock(orderId: string): Promise<string | null> {
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+        console.warn('checkOrderStock: missing env vars, skipping stock check');
+        return null;
+    }
     const supabase = createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.SUPABASE_SERVICE_ROLE_KEY!,
+        process.env.NEXT_PUBLIC_SUPABASE_URL,
+        process.env.SUPABASE_SERVICE_ROLE_KEY,
         { auth: { autoRefreshToken: false, persistSession: false } }
     );
 
