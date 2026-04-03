@@ -13,6 +13,7 @@ interface FormField {
     required: boolean;
     options: string[];
     orderIndex: number;
+    is_couple_field?: boolean | null;
 }
 
 interface FormData {
@@ -24,16 +25,18 @@ interface FormData {
     hasTentNotice: boolean;
 }
 
-const SHIRT_SIZES = ['PP', 'P', 'M', 'G', 'GG', 'XG', 'XXG'];
+const SHIRT_SIZES_MEN = ['PP', 'P', 'M', 'G', 'GG', 'XG', 'XXG'];
+const SHIRT_SIZES_WOMEN = ['PP', 'P', 'M', 'G', 'GG', 'XG', 'XXG', 'Baby Look PP', 'Baby Look P', 'Baby Look M', 'Baby Look G', 'Baby Look GG'];
 
-function makeShirtField(label: string, orderIndex: number): FormField {
+function makeShirtField(label: string, orderIndex: number, sizes: string[], isCoupleField?: boolean): FormField {
     return {
         id: `temp-shirt-${Date.now()}-${Math.random().toString(36).slice(2)}`,
         label,
         type: 'shirt_size',
         required: true,
-        options: SHIRT_SIZES,
+        options: sizes,
         orderIndex,
+        is_couple_field: isCoupleField ?? null,
     };
 }
 
@@ -47,11 +50,11 @@ function addShirtFields(fields: FormField[], isCouple: boolean): FormField[] {
     if (isCouple) {
         return [
             ...base,
-            makeShirtField('Tamanho da Camisa (Homem)', startIndex),
-            makeShirtField('Tamanho da Camisa (Mulher)', startIndex + 1),
+            makeShirtField('Tamanho da Camisa (Homem)', startIndex, SHIRT_SIZES_MEN, false),
+            makeShirtField('Tamanho da Camisa (Mulher)', startIndex + 1, SHIRT_SIZES_WOMEN, false),
         ];
     }
-    return [...base, makeShirtField('Tamanho da Camisa', startIndex)];
+    return [...base, makeShirtField('Tamanho da Camisa', startIndex, SHIRT_SIZES_MEN, null)];
 }
 
 export default function NewFormPage() {
@@ -140,9 +143,10 @@ export default function NewFormPage() {
                     label: field.label,
                     type: field.type,
                     required: field.required || false,
-                    options: field.options && Array.isArray(field.options) ? field.options : 
+                    options: field.options && Array.isArray(field.options) ? field.options :
                              (typeof field.options === 'string' ? JSON.parse(field.options) : []),
-                    orderIndex: field.order_index || 0
+                    orderIndex: field.order_index || 0,
+                    is_couple_field: field.is_couple_field ?? null,
                 }));
                 setFields(loadedFields);
             }
@@ -343,7 +347,8 @@ export default function NewFormPage() {
                             type: field.type,
                             required: field.required,
                             options: field.options.length > 0 ? field.options : null,
-                            order_index: field.orderIndex
+                            order_index: field.orderIndex,
+                            is_couple_field: field.is_couple_field ?? null,
                         }]);
 
                     if (fieldError) {
@@ -358,7 +363,8 @@ export default function NewFormPage() {
                             type: field.type,
                             required: field.required,
                             options: field.options.length > 0 ? field.options : null,
-                            order_index: field.orderIndex
+                            order_index: field.orderIndex,
+                            is_couple_field: field.is_couple_field ?? null,
                         })
                         .eq('id', field.id);
 
