@@ -1,5 +1,4 @@
 import { createServerClient } from '@supabase/ssr'
-import { cookies } from 'next/headers'
 import { NextResponse, type NextRequest } from 'next/server'
 
 export async function GET(request: NextRequest) {
@@ -7,11 +6,11 @@ export async function GET(request: NextRequest) {
     const code = searchParams.get('code')
     const next = searchParams.get('next') ?? '/dashboard'
 
-    // Use NEXT_PUBLIC_SITE_URL to avoid localhost:3000 behind reverse proxy
     const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || '').replace(/\/$/, '')
 
     if (code) {
-        const cookieStore = await cookies()
+        // Create the redirect response first so we can set cookies directly on it
+        const response = NextResponse.redirect(`${siteUrl}${next}`)
 
         const supabase = createServerClient(
             process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -19,12 +18,13 @@ export async function GET(request: NextRequest) {
             {
                 cookies: {
                     getAll() {
-                        return cookieStore.getAll()
+                        return request.cookies.getAll()
                     },
                     setAll(cookiesToSet) {
-                        cookiesToSet.forEach(({ name, value, options }) =>
-                            cookieStore.set(name, value, options)
-                        )
+                        cookiesToSet.forEach(({ name, value, options }) => {
+                            request.cookies.set(name, value)
+                            response.cookies.set(name, value, options)
+                        })
                     },
                 },
             }
@@ -33,7 +33,7 @@ export async function GET(request: NextRequest) {
         const { error } = await supabase.auth.exchangeCodeForSession(code)
 
         if (!error) {
-            return NextResponse.redirect(`${siteUrl}${next}`)
+            return response
         }
     }
 
