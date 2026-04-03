@@ -85,7 +85,7 @@ export default function ProfilePage() {
             const { data: ordersData, error: ordersError } = await supabase
                 .from('orders')
                 .select('id')
-                .or(`user_id.eq.${user.id},customer_email.eq.${user.email}`);
+                .or(`user_id.eq.${user.id},participant_email.eq.${user.email}`);
 
             if (ordersError) {
                 console.error('Error fetching orders:', ordersError);
