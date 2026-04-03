@@ -54,7 +54,7 @@ function addShirtFields(fields: FormField[], isCouple: boolean): FormField[] {
             makeShirtField('Tamanho da Camisa (Mulher)', startIndex + 1, SHIRT_SIZES_WOMEN, false),
         ];
     }
-    return [...base, makeShirtField('Tamanho da Camisa', startIndex, SHIRT_SIZES_MEN, null)];
+    return [...base, makeShirtField('Tamanho da Camisa', startIndex, SHIRT_SIZES_MEN)];
 }
 
 export default function NewFormPage() {
