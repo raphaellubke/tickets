@@ -15,7 +15,8 @@
     "jszip": "^3.10.1",
     "next": "16.0.3",
     "react": "19.2.0",
-    "react-dom": "19.2.0"
+    "react-dom": "19.2.0",
+    "resend": "^6.10.0"
   },
   "devDependencies": {
     "@types/node": "^20",

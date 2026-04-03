@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { sendPaymentConfirmationEmail } from '@/lib/sendEmail';
 
 export async function POST(request: NextRequest) {
     // Validate webhook secret to prevent unauthorized calls
@@ -123,7 +124,7 @@ async function processApprovedPayment(orderId: string, supabase: any) {
                         status: 'active',
                         organization_id: order.organization_id
                     })
-                    .select()
+                    .select('*, event_ticket_types(name)')
                     .single();
 
                 if (ticketError) {
@@ -189,6 +190,46 @@ async function processApprovedPayment(orderId: string, supabase: any) {
         // This is handled by the increment function above
 
         console.log(`Processed payment for order ${orderId}: ${tickets.length} tickets created`);
+
+        // 8. Send confirmation email
+        try {
+            const { data: eventData } = await supabase
+                .from('events')
+                .select('name')
+                .eq('id', order.event_id)
+                .single();
+
+            const { data: pendingForm } = await supabase
+                .from('form_responses')
+                .select('ticket_id')
+                .in('ticket_id', tickets.map((t: any) => t.id))
+                .eq('status', 'pending')
+                .limit(1)
+                .maybeSingle();
+
+            const { data: paymentData } = await supabase
+                .from('payments')
+                .select('payment_method')
+                .eq('order_id', orderId)
+                .maybeSingle();
+
+            await sendPaymentConfirmationEmail({
+                to: order.participant_email,
+                participantName: order.participant_name || order.participant_email,
+                eventName: eventData?.name || 'Evento',
+                orderNumber: order.order_number,
+                totalAmount: parseFloat(order.total_amount),
+                paymentMethod: paymentData?.payment_method === 'credit_card' ? 'card' : 'pix',
+                tickets: tickets.map((t: any) => ({
+                    code: t.ticket_code,
+                    type: t.event_ticket_types?.name || 'Ingresso',
+                })),
+                pendingFormTicketId: pendingForm?.ticket_id || null,
+            });
+        } catch (emailErr) {
+            console.error('Error sending confirmation email:', emailErr);
+            // Non-critical — don't fail the webhook
+        }
     } catch (error: any) {
         console.error('Error processing approved payment:', error);
         throw error;
