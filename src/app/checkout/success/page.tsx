@@ -82,7 +82,7 @@ function CheckoutSuccessPageContent() {
                     const firstPendingTicketId = pendingFormsList[0]?.ticket_id;
                     const nextPath = firstPendingTicketId
                         ? `/form/${firstPendingTicketId}`
-                        : '/dashboard/tickets';
+                        : '/meus-ingressos';
                     const redirectTo = `${window.location.origin}/auth/callback?next=${nextPath}`;
                     const { error: otpError } = await supabase.auth.signInWithOtp({
                         email: orderData.participant_email,
@@ -260,7 +260,7 @@ function CheckoutSuccessPageContent() {
                         <Link href="/" className={styles.primaryButton}>
                             Voltar ao Início
                         </Link>
-                        <Link href="/dashboard/tickets" className={styles.secondaryButton}>
+                        <Link href="/meus-ingressos" className={styles.secondaryButton}>
                             Ver Meus Ingressos
                         </Link>
                     </div>

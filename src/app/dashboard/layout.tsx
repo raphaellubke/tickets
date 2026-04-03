@@ -2,10 +2,9 @@
 
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { createClient } from '@/lib/supabase/client';
-import CreateOrganizationModal from '@/components/CreateOrganizationModal/CreateOrganizationModal';
 import InviteMemberModal from '@/components/InviteMemberModal/InviteMemberModal';
 import styles from './layout.module.css';
 
@@ -15,6 +14,7 @@ export default function DashboardLayout({
     children: React.ReactNode;
 }) {
     const pathname = usePathname();
+    const router = useRouter();
     const { user, signOut } = useAuth();
     const [hasOrganization, setHasOrganization] = useState<boolean | null>(null);
     const [organization, setOrganization] = useState<{ name: string; logo_url?: string | null } | null>(null);
@@ -65,11 +65,14 @@ export default function DashboardLayout({
                         });
                     }
                 } else {
-                    setHasOrganization(false);
+                    // Not a member of any organization — redirect to personal tickets page
+                    router.replace('/meus-ingressos');
+                    return;
                 }
             } catch (err) {
                 console.error('Error in checkOrganization:', err);
-                setHasOrganization(false);
+                router.replace('/meus-ingressos');
+                return;
             } finally {
                 setLoading(false);
             }
@@ -93,10 +96,6 @@ export default function DashboardLayout({
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, [sidebarOpen]);
-
-    const handleOrganizationCreated = () => {
-        setHasOrganization(true);
-    };
 
     // Show loading state
     if (loading) {
@@ -285,11 +284,6 @@ export default function DashboardLayout({
                     {children}
                 </div>
             </main>
-
-            {/* Show modal if user doesn't have an organization */}
-            {hasOrganization === false && (
-                <CreateOrganizationModal onSuccess={handleOrganizationCreated} />
-            )}
 
             {/* Invite Member Modal */}
             <InviteMemberModal
