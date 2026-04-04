@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { useAuth } from '@/context/AuthContext';
 import AuthModal from '@/components/AuthModal/AuthModal';
 import styles from './Header.module.css';
@@ -15,8 +16,14 @@ export default function Header() {
             <header className={styles.header}>
                 <div className={styles.container}>
                     <Link href="/" className={styles.logo}>
-                        <span className={styles.logoIcon}>✝️</span>
-                        <span className={styles.logoText}>Missão Guadalupe</span>
+                        <Image
+                            src="/logo.png"
+                            alt="Missão Guadalupe"
+                            height={44}
+                            width={160}
+                            style={{ objectFit: 'contain', height: '44px', width: 'auto' }}
+                            priority
+                        />
                     </Link>
 
 

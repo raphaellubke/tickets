@@ -25,15 +25,7 @@
 .logo {
     display: flex;
     align-items: center;
-    gap: var(--spacing-xs);
-    font-weight: 800;
-    font-size: 1.5rem;
-    color: var(--text-color);
-    letter-spacing: -0.02em;
-}
-
-.logoIcon {
-    font-size: 1.75rem;
+    flex-shrink: 0;
 }
 
 .locationSelector {
@@ -191,12 +183,8 @@
         gap: 12px;
     }
 
-    .logo {
-        font-size: 1.25rem;
-    }
-
-    .logoIcon {
-        font-size: 1.5rem;
+    .logo img {
+        height: 36px !important;
     }
 
     .searchContainer {
@@ -234,8 +222,8 @@
 }
 
 @media (max-width: 480px) {
-    .logoText {
-        display: none;
+    .logo img {
+        height: 30px !important;
     }
 
     .searchInput {
