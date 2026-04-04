@@ -13,6 +13,7 @@ interface FormFieldMeta {
 }
 interface FormAnswer {
     value: string | null;
+    field_label?: string | null;
     form_fields?: FormFieldMeta | null;
 }
 interface PdfPayload {
@@ -285,15 +286,16 @@ function buildPDF(payload: PdfPayload): string {
         // Deduplicate by normalised label
         const deduped = new Map<string, FormAnswer>();
         for (const ans of sorted) {
-            const raw = ans.form_fields?.label;
+            const raw = ans.form_fields?.label || ans.field_label;
             if (!raw) continue;
             const key = normalizeLabel(raw);
             const existing = deduped.get(key);
             if (!existing || richness(ans.value || '') > richness(existing.value || '')) {
-                deduped.set(key, {
-                    ...ans,
-                    form_fields: ans.form_fields ? { ...ans.form_fields, label: key } : ans.form_fields,
-                });
+                // Ensure form_fields always has a label (synthesize from field_label if needed)
+                const syntheticFields: FormFieldMeta = ans.form_fields
+                    ? { ...ans.form_fields, label: key }
+                    : { label: key, type: 'text' };
+                deduped.set(key, { ...ans, form_fields: syntheticFields });
             }
         }
 
@@ -303,9 +305,9 @@ function buildPDF(payload: PdfPayload): string {
 
         for (const ans of deduped.values()) {
             const field  = ans.form_fields;
-            if (!field?.label) continue;
-            const label  = field.label;
-            const type   = field.type || 'text';
+            const label  = field?.label || ans.field_label;
+            if (!label) continue;
+            const type   = field?.type || 'text';
             const rawVal = (ans.value || '').trim();
 
             if (type === 'section_header') {
@@ -317,7 +319,7 @@ function buildPDF(payload: PdfPayload): string {
             const couple = parseCouple(rawVal);
             if (couple) {
                 if (!couple.ela && !couple.ele) continue; // both empty — skip
-                const forceSingle = field.is_couple_field === false;
+                const forceSingle = field?.is_couple_field === false;
                 if (forceSingle) {
                     const display = couple.ela === couple.ele
                         ? (couple.ela || couple.ele)
