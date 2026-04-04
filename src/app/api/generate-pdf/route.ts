@@ -285,16 +285,19 @@ function buildPDF(payload: PdfPayload): string {
 
         // Deduplicate by normalised label
         const deduped = new Map<string, FormAnswer>();
+        let orphanIdx = 0;
         for (const ans of sorted) {
-            const raw = ans.form_fields?.label || ans.field_label;
-            if (!raw) continue;
-            const key = normalizeLabel(raw);
+            // Skip answers with no value at all
+            if (!ans.value?.trim()) continue;
+            const rawLabel = ans.form_fields?.label || ans.field_label;
+            // Use a unique fallback key for answers whose field was removed
+            const key = rawLabel ? normalizeLabel(rawLabel) : `__orphan_${orphanIdx++}`;
+            const displayLabel = rawLabel ? normalizeLabel(rawLabel) : `Resposta ${orphanIdx}`;
             const existing = deduped.get(key);
             if (!existing || richness(ans.value || '') > richness(existing.value || '')) {
-                // Ensure form_fields always has a label (synthesize from field_label if needed)
                 const syntheticFields: FormFieldMeta = ans.form_fields
-                    ? { ...ans.form_fields, label: key }
-                    : { label: key, type: 'text' };
+                    ? { ...ans.form_fields, label: displayLabel }
+                    : { label: displayLabel, type: 'text' };
                 deduped.set(key, { ...ans, form_fields: syntheticFields });
             }
         }
@@ -305,7 +308,7 @@ function buildPDF(payload: PdfPayload): string {
 
         for (const ans of deduped.values()) {
             const field  = ans.form_fields;
-            const label  = field?.label || ans.field_label;
+            const label  = field?.label || ans.field_label || 'Campo';
             if (!label) continue;
             const type   = field?.type || 'text';
             const rawVal = (ans.value || '').trim();

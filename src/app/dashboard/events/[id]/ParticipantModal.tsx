@@ -39,6 +39,7 @@ const paymentMethodLabel: Record<string, string> = {
 export default function ParticipantModal({ order, eventName, onClose, onPrintPDF }: ParticipantModalProps) {
     const supabase = createClient();
     const [loading, setLoading] = useState(true);
+    const [reloading, setReloading] = useState(false);
     const [formDetails, setFormDetails] = useState<Record<string, TicketFormDetail>>({});
     const [copiedTicket, setCopiedTicket] = useState<string | null>(null);
     const [emailSent, setEmailSent] = useState<Record<string, boolean>>({});
@@ -126,6 +127,20 @@ export default function ParticipantModal({ order, eventName, onClose, onPrintPDF
         } finally {
             setLoading(false);
         }
+    }
+
+    async function reloadFormDetails() {
+        setReloading(true);
+        try {
+            // Ensure form_responses exist for this order's tickets
+            await fetch('/api/ensure-form-responses', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ orderId: order.id }),
+            });
+        } catch {}
+        await loadFormDetails();
+        setReloading(false);
     }
 
     async function copyFormLink(ticketId: string) {
@@ -354,7 +369,7 @@ export default function ParticipantModal({ order, eventName, onClose, onPrintPDF
                                                     return (
                                                         <div key={idx} className={styles.answerItem}>
                                                             <span className={styles.answerQuestion}>
-                                                                {answer.form_fields?.label || `Pergunta ${idx + 1}`}
+                                                                {answer.form_fields?.label || answer.field_label || `Pergunta ${idx + 1}`}
                                                             </span>
                                                             <span className={styles.answerValue}>
                                                                 {displayValue}
@@ -386,6 +401,17 @@ export default function ParticipantModal({ order, eventName, onClose, onPrintPDF
 
                 <div className={styles.modalFooter}>
                     <button className={styles.secondaryBtn} onClick={onClose}>Fechar</button>
+                    <button
+                        className={styles.secondaryBtn}
+                        onClick={reloadFormDetails}
+                        disabled={reloading || loading}
+                        title="Recarrega as respostas do formulário do banco de dados"
+                    >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={reloading ? { animation: 'spin 1s linear infinite' } : undefined}>
+                            <polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+                        </svg>
+                        {reloading ? 'Recarregando...' : 'Recarregar'}
+                    </button>
                     <button className={styles.pdfBtn} onClick={() => onPrintPDF(order, formDetails)}>
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                             <polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/>

@@ -590,6 +590,11 @@ function CheckoutPageContent() {
                         updated_at: new Date().toISOString(),
                     }).eq('id', dbPaymentId);
                     await processApprovedPayment(orderId);
+                    fetch('/api/send-payment-confirmation', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ orderId }),
+                    }).catch(() => {});
                     await releaseReservation();
                     sessionStorage.removeItem('checkoutData');
                     router.push(`/checkout/success?order_id=${orderId}`);
@@ -671,6 +676,11 @@ function CheckoutPageContent() {
             }).eq('id', paymentData.id);
             await supabase.from('orders').update({ payment_method: 'card' }).eq('id', order.id);
             await processApprovedPayment(order.id);
+            fetch('/api/send-payment-confirmation', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ orderId: order.id }),
+            }).catch(() => {});
             await releaseReservation();
             sessionStorage.removeItem('checkoutData');
             router.push(`/checkout/success?order_id=${order.id}`);

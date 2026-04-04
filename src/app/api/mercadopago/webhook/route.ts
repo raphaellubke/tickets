@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { sendPaymentConfirmationEmail } from '@/lib/sendEmail';
 
 // MercadoPago sends a GET request first to verify the endpoint
 export async function GET() {
@@ -194,4 +195,48 @@ async function processApprovedPayment(orderId: string, supabase: any) {
     }
 
     console.log(`MP webhook processed order ${orderId}`);
+
+    // Send confirmation email (non-critical)
+    try {
+        const { data: allTickets } = await supabase
+            .from('tickets')
+            .select('id, ticket_code, event_ticket_types(name)')
+            .eq('order_id', orderId);
+
+        const { data: eventData } = await supabase
+            .from('events')
+            .select('name')
+            .eq('id', order.event_id)
+            .single();
+
+        const { data: pendingForm } = await supabase
+            .from('form_responses')
+            .select('ticket_id')
+            .in('ticket_id', (allTickets || []).map((t: any) => t.id))
+            .eq('status', 'pending')
+            .limit(1)
+            .maybeSingle();
+
+        const { data: paymentRow } = await supabase
+            .from('payments')
+            .select('payment_method')
+            .eq('order_id', orderId)
+            .maybeSingle();
+
+        await sendPaymentConfirmationEmail({
+            to: order.participant_email,
+            participantName: order.participant_name || order.participant_email,
+            eventName: eventData?.name || 'Evento',
+            orderNumber: order.order_number,
+            totalAmount: parseFloat(order.total_amount),
+            paymentMethod: paymentRow?.payment_method === 'credit_card' || paymentRow?.payment_method === 'card' ? 'card' : 'pix',
+            tickets: (allTickets || []).map((t: any) => ({
+                code: t.ticket_code,
+                type: t.event_ticket_types?.name || 'Ingresso',
+            })),
+            pendingFormTicketId: pendingForm?.ticket_id || null,
+        });
+    } catch (emailErr) {
+        console.error('Error sending confirmation email (webhook):', emailErr);
+    }
 }
