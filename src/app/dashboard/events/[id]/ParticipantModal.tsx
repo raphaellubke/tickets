@@ -6,6 +6,7 @@ import styles from './ParticipantModal.module.css';
 
 interface FormAnswerDetail {
     value: string | null;
+    field_label: string | null;
     form_fields: {
         label: string;
         type: string;
@@ -66,28 +67,33 @@ export default function ParticipantModal({ order, eventName, onClose, onPrintPDF
                 await Promise.all(responses.map(async (response) => {
                     let answers: FormAnswerDetail[] = [];
 
-                    if (response.status === 'completed') {
-                        const { data: rawAnswers } = await supabase
-                            .from('form_response_answers')
-                            .select('value, field_id')
-                            .eq('response_id', response.id);
+                    // Load answers for any status — don't skip pending responses
+                    const { data: rawAnswers } = await supabase
+                        .from('form_response_answers')
+                        .select('value, field_id, field_label')
+                        .eq('response_id', response.id);
 
-                        if (rawAnswers && rawAnswers.length > 0) {
-                            const fieldIds = rawAnswers.map((a: any) => a.field_id).filter(Boolean);
+                    if (rawAnswers && rawAnswers.length > 0) {
+                        // Try to enrich with current field metadata (label, type, order)
+                        const fieldIds = rawAnswers.map((a: any) => a.field_id).filter(Boolean);
+                        let fieldMap: Record<string, any> = {};
+                        if (fieldIds.length > 0) {
                             const { data: fields } = await supabase
                                 .from('form_fields')
                                 .select('id, label, type, order_index, is_couple_field')
                                 .in('id', fieldIds);
+                            fieldMap = Object.fromEntries((fields || []).map((f: any) => [f.id, f]));
+                        }
 
-                            const fieldMap = Object.fromEntries((fields || []).map((f: any) => [f.id, f]));
-
-                            answers = rawAnswers.map((a: any) => ({
+                        answers = rawAnswers
+                            .filter((a: any) => a.value !== null || a.field_label)
+                            .map((a: any) => ({
                                 value: a.value,
-                                form_fields: fieldMap[a.field_id] || null,
+                                field_label: a.field_label,
+                                form_fields: a.field_id ? (fieldMap[a.field_id] || null) : null,
                             })).sort((a, b) =>
                                 (a.form_fields?.order_index || 0) - (b.form_fields?.order_index || 0)
                             );
-                        }
                     }
 
                     details[response.ticket_id] = {

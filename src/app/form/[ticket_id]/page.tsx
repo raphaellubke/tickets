@@ -207,6 +207,7 @@ export default function FormResponsePage({ params }: { params: Promise<{ ticket_
                 .map(field => ({
                     response_id: formResponse.id,
                     field_id: field.id,
+                    field_label: field.label,
                     value: (isCouple && field.is_couple_field !== false)
                         ? JSON.stringify(coupleAnswers[field.id] || { ele: '', ela: '' })
                         : (answers[field.id] || null),

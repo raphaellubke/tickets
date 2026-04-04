@@ -107,11 +107,11 @@ function buildParticipantHtml(order: Participant, eventName: string, formDetails
         for (const ticket of order.tickets) {
             const detail = formDetails[ticket.id];
             if (!detail) continue;
-            if (detail.status === 'completed' && detail.answers?.length > 0) {
+            if (detail.answers?.length > 0) {
                 formHtml += `<div class="form-section"><h4>${ticket.event_ticket_types?.name || 'Ingresso'} — Respostas do Formulário</h4>`;
                 for (const answer of detail.answers) {
-                    if (!answer.form_fields) continue;
-                    formHtml += `<div class="qa"><div class="q">${answer.form_fields.label}</div><div class="a">${answer.value || '(sem resposta)'}</div></div>`;
+                    const label = answer.form_fields?.label || answer.field_label || '(campo removido)';
+                    formHtml += `<div class="qa"><div class="q">${label}</div><div class="a">${answer.value || '(sem resposta)'}</div></div>`;
                 }
                 formHtml += '</div>';
             } else if (detail.status === 'pending') {
