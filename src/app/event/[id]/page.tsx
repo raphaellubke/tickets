@@ -476,10 +476,9 @@ export default function EventDetails({ params }: { params: Promise<{ id: string 
                                         <line x1="3" y1="10" x2="21" y2="10"/>
                                     </svg>
                                     <div>
-                                        <span className={styles.metaLabel}>Data e Hora</span>
+                                        <span className={styles.metaLabel}>Data</span>
                                         <span className={styles.metaValue}>
                                             {dateInfo.dayName}, {dateInfo.day} {dateInfo.month} {dateInfo.year}
-                                            {eventTime && ` às ${eventTime}`}
                                         </span>
                                     </div>
                                 </div>

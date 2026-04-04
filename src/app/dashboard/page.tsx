@@ -399,7 +399,6 @@ export default function DashboardPage() {
                             {upcomingEvents.length > 0 ? (
                                 upcomingEvents.map((event) => {
                                     const date = new Date(event.event_date);
-                                    const time = event.event_time ? event.event_time : '00:00';
                                     return (
                                         <Link key={event.id} href={`/dashboard/events/new?id=${event.id}`} className={styles.upcomingItem}>
                                             <div className={styles.dateBox}>
@@ -411,7 +410,6 @@ export default function DashboardPage() {
                                             <div className={styles.upcomingInfo}>
                                                 <div className={styles.upcomingTitle}>{event.name || event.title}</div>
                                                 <div className={styles.upcomingMeta}>
-                                                    <span>🕒 {time}</span>
                                                     {event.location && <span>📍 {event.location}</span>}
                                                 </div>
                                             </div>

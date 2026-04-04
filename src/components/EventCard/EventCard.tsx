@@ -10,11 +10,11 @@ interface EventCardProps {
     title: string;
     location: string;
     date: string;
-    time: string;
+    time?: string;
     price: string;
 }
 
-export default function EventCard({ id, image, tag, title, location, date, time, price }: EventCardProps) {
+export default function EventCard({ id, image, tag, title, location, date, price }: EventCardProps) {
     return (
         <Link href={`/event/${id}`} className={styles.cardLink}>
             <article className={styles.card}>
@@ -31,7 +31,6 @@ export default function EventCard({ id, image, tag, title, location, date, time,
                     <div className={styles.footer}>
                         <div className={styles.dateTime}>
                             <span className={styles.date}>{date}</span>
-                            <span className={styles.time}>{time}</span>
                         </div>
                         <div className={styles.priceContainer}>
                             <span className={styles.price}>{price}</span>
