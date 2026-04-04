@@ -4,6 +4,7 @@ import { useState, FormEvent, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/context/AuthContext';
+import { useDraft } from '@/hooks/useDraft';
 import styles from './page.module.css';
 
 interface FormField {
@@ -79,6 +80,25 @@ export default function NewFormPage() {
     const [loading, setLoading] = useState(false);
     const [loadingData, setLoadingData] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [draftRestored, setDraftRestored] = useState(false);
+
+    const draftKey = isEditMode ? `draft_form_${formId}` : 'draft_form_new';
+    const { hasDraft, restoreDraft, clearDraft, saveStatus } = useDraft(
+        draftKey,
+        { formData, fields },
+        !loadingData,
+    );
+
+    useEffect(() => {
+        if (isEditMode || draftRestored || loadingData) return;
+        if (!hasDraft) return;
+        const draft = restoreDraft();
+        if (draft?.formData) {
+            setFormData(draft.formData);
+            if (draft.fields?.length) setFields(draft.fields);
+            setDraftRestored(true);
+        }
+    }, [hasDraft, isEditMode, loadingData]);
 
     // Load form data when in edit mode
     useEffect(() => {
@@ -374,7 +394,7 @@ export default function NewFormPage() {
                 }
             }
 
-            // Redirect to forms list
+            clearDraft();
             router.push('/dashboard/form');
         } catch (err: any) {
             console.error(`Error ${isEditMode ? 'updating' : 'creating'} form:`, err);
@@ -416,6 +436,13 @@ export default function NewFormPage() {
                     </p>
                 </div>
             </div>
+
+            {saveStatus === 'saved' && (
+                <div style={{ fontSize: '13px', color: '#6b7280', padding: '6px 0 0', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 6L9 17l-5-5"/></svg>
+                    Rascunho salvo automaticamente
+                </div>
+            )}
 
             {error && (
                 <div className={styles.errorAlert}>

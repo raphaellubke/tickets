@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/context/AuthContext';
 import { uploadImage } from '@/lib/uploadImage';
 import ImageUpload from '@/components/ImageUpload/ImageUpload';
+import { useDraft } from '@/hooks/useDraft';
 import styles from './page.module.css';
 
 interface EventFormData {
@@ -79,6 +80,26 @@ export default function NewEventPage() {
     const [error, setError] = useState<string | null>(null);
     const [ticketGroups, setTicketGroups] = useState<TicketGroup[]>([]);
     const [availableForms, setAvailableForms] = useState<Array<{ id: string; name: string }>>([]);
+    const [draftRestored, setDraftRestored] = useState(false);
+
+    const draftKey = isEditMode ? `draft_event_${eventId}` : 'draft_event_new';
+    const { hasDraft, draftSavedAt, restoreDraft, clearDraft, saveStatus } = useDraft(
+        draftKey,
+        { formData, ticketGroups },
+        !loadingData,
+    );
+
+    // Restore draft on mount (new mode only, before any data is loaded)
+    useEffect(() => {
+        if (isEditMode || draftRestored || loadingData) return;
+        if (!hasDraft) return;
+        const draft = restoreDraft();
+        if (draft?.formData) {
+            setFormData(draft.formData);
+            if (draft.ticketGroups?.length) setTicketGroups(draft.ticketGroups);
+            setDraftRestored(true);
+        }
+    }, [hasDraft, isEditMode, loadingData]);
 
     const handleInputChange = (
         e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
@@ -613,7 +634,8 @@ export default function NewEventPage() {
                 }
             }
 
-            // Redirect to events list
+            // Clear draft and redirect
+            clearDraft();
             router.push('/dashboard/events');
         } catch (err: any) {
             console.error(`Error ${isEditMode ? 'updating' : 'creating'} event:`, err);
@@ -655,6 +677,13 @@ export default function NewEventPage() {
                     </p>
                 </div>
             </div>
+
+            {saveStatus === 'saved' && (
+                <div style={{ fontSize: '13px', color: '#6b7280', padding: '6px 0 0', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 6L9 17l-5-5"/></svg>
+                    Rascunho salvo automaticamente
+                </div>
+            )}
 
             {error && (
                 <div className={styles.errorAlert}>
