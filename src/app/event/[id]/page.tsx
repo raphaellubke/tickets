@@ -594,7 +594,7 @@ export default function EventDetails({ params }: { params: Promise<{ id: string 
                                     const reserved = reservedCounts[t.id] || 0;
                                     return !t.isActive || (t.quantityAvailable - t.quantitySold - reserved) <= 0;
                                 })
-                            ) && event.allow_waitlist ? (
+                            ) ? (
                                 <WaitlistForm
                                     eventId={eventId}
                                     organizationId={event.organization_id}
