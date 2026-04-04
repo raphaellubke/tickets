@@ -3,7 +3,7 @@ import { createAdminClient } from '@/lib/supabase/server';
 import { Resend } from 'resend';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
-const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || '').replace(/\/$/, '');
+const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || 'https://ingressos.missaoguadalupe.org').replace(/\/$/, '');
 
 export async function POST(request: NextRequest) {
     try {

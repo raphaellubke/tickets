@@ -191,23 +191,23 @@ function printPDF(participants: Participant[], eventName: string, allFormDetails
 
     const css = `
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #1a1a1a; background: #fff; padding: 20px; font-size: 13px; }
-        h1 { font-size: 22px; font-weight: 700; color: #111; margin-bottom: 6px; }
-        .meta { font-size: 12px; color: #666; margin-bottom: 24px; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #1a1a1a; background: #fff; padding: 20px; font-size: 16px; }
+        h1 { font-size: 26px; font-weight: 700; color: #111; margin-bottom: 6px; }
+        .meta { font-size: 15px; color: #666; margin-bottom: 24px; }
         .participant { margin-bottom: 32px; }
         .participant-header { display: flex; align-items: baseline; gap: 12px; margin-bottom: 14px; padding-bottom: 8px; border-bottom: 2px solid #111; }
-        .participant-header h2 { font-size: 17px; font-weight: 700; }
-        .event-name { font-size: 12px; color: #666; }
+        .participant-header h2 { font-size: 20px; font-weight: 700; }
+        .event-name { font-size: 15px; color: #666; }
         .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 14px; }
         .info-item { display: flex; flex-direction: column; gap: 1px; }
-        .label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: #888; }
-        .value { font-size: 13px; color: #111; font-weight: 500; }
-        .form-section { background: #f9f9f9; border: 1px solid #eee; border-radius: 6px; padding: 12px; margin-top: 10px; }
-        .form-section h4 { font-size: 12px; font-weight: 700; color: #555; margin-bottom: 10px; padding-bottom: 6px; border-bottom: 1px solid #eee; }
-        .qa { margin-bottom: 8px; }
-        .q { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: #888; margin-bottom: 2px; }
-        .a { font-size: 13px; color: #111; }
-        .pending-note { color: #b45309; font-size: 12px; font-weight: 500; }
+        .label { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: #888; }
+        .value { font-size: 16px; color: #111; font-weight: 500; }
+        .form-section { background: #f9f9f9; border: 1px solid #eee; border-radius: 6px; padding: 14px; margin-top: 10px; }
+        .form-section h4 { font-size: 15px; font-weight: 700; color: #555; margin-bottom: 10px; padding-bottom: 6px; border-bottom: 1px solid #eee; }
+        .qa { margin-bottom: 10px; }
+        .q { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: #888; margin-bottom: 3px; }
+        .a { font-size: 16px; color: #111; }
+        .pending-note { color: #b45309; font-size: 15px; font-weight: 500; }
         @media print { @page { margin: 15mm; } body { padding: 0; } .participant + .participant { page-break-before: always; } }
     `;
 
