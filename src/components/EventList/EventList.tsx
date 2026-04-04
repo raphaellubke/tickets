@@ -85,7 +85,8 @@ export default function EventList() {
     }, []);
 
     const formatDate = (dateString: string, timeString: string) => {
-        const date = new Date(dateString);
+        const [y, m, d] = dateString.split('T')[0].split('-').map(Number);
+        const date = new Date(y, m - 1, d);
         const days = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
         const months = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
         
