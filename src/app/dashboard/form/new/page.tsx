@@ -26,8 +26,9 @@ interface FormData {
     hasTentNotice: boolean;
 }
 
-const SHIRT_SIZES_MEN = ['PP', 'P', 'M', 'G', 'GG', 'XG', 'XXG'];
-const SHIRT_SIZES_WOMEN = ['PP', 'P', 'M', 'G', 'GG', 'XG', 'XXG', 'Baby Look PP', 'Baby Look P', 'Baby Look M', 'Baby Look G', 'Baby Look GG'];
+const SHIRT_SIZES_COMMON = ['P', 'M', 'G', 'GG', 'EG', 'EGG', 'G1', 'G2', 'G3', 'G4'];
+const SHIRT_SIZES_MEN = SHIRT_SIZES_COMMON;
+const SHIRT_SIZES_WOMEN = [...SHIRT_SIZES_COMMON, 'Baby Look P', 'Baby Look M', 'Baby Look G', 'Baby Look GG', 'Baby Look EG'];
 
 function makeShirtField(label: string, orderIndex: number, sizes: string[], isCoupleField?: boolean): FormField {
     return {

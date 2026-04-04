@@ -283,7 +283,7 @@ export default function FormResponsePage({ params }: { params: Promise<{ ticket_
                 );
             }
             case 'shirt_size': {
-                const sizes: string[] = (field.options as any)?.length > 0 ? (field.options as any) : ['PP', 'P', 'M', 'G', 'GG', 'XG', 'XXG'];
+                const sizes: string[] = (field.options as any)?.length > 0 ? (field.options as any) : ['P', 'M', 'G', 'GG', 'EG', 'EGG', 'G1', 'G2', 'G3', 'G4'];
                 return (
                     <div className={styles.sizeGrid + errClass}>
                         {sizes.map(s => (
