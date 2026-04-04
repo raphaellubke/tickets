@@ -68,13 +68,29 @@ export default function ParticipantModal({ order, eventName, onClose, onPrintPDF
                     let answers: FormAnswerDetail[] = [];
 
                     // Load answers for any status — don't skip pending responses
+                    // Select only base columns (field_label may not exist in DB yet)
                     const { data: rawAnswers } = await supabase
                         .from('form_response_answers')
-                        .select('value, field_id, field_label')
+                        .select('value, field_id')
                         .eq('response_id', response.id);
 
                     if (rawAnswers && rawAnswers.length > 0) {
-                        // Try to enrich with current field metadata (label, type, order)
+                        // Try to enrich with field_label if the column exists
+                        let labelMap: Record<string, string> = {};
+                        try {
+                            const { data: withLabel } = await supabase
+                                .from('form_response_answers')
+                                .select('field_id, field_label')
+                                .eq('response_id', response.id)
+                                .not('field_label', 'is', null);
+                            if (withLabel) {
+                                withLabel.forEach((r: any) => {
+                                    if (r.field_id && r.field_label) labelMap[r.field_id] = r.field_label;
+                                });
+                            }
+                        } catch { /* field_label column may not exist yet */ }
+
+                        // Fetch current field metadata for label/order
                         const fieldIds = rawAnswers.map((a: any) => a.field_id).filter(Boolean);
                         let fieldMap: Record<string, any> = {};
                         if (fieldIds.length > 0) {
@@ -86,10 +102,10 @@ export default function ParticipantModal({ order, eventName, onClose, onPrintPDF
                         }
 
                         answers = rawAnswers
-                            .filter((a: any) => a.value !== null || a.field_label)
+                            .filter((a: any) => a.value !== null)
                             .map((a: any) => ({
                                 value: a.value,
-                                field_label: a.field_label,
+                                field_label: labelMap[a.field_id] || null,
                                 form_fields: a.field_id ? (fieldMap[a.field_id] || null) : null,
                             })).sort((a, b) =>
                                 (a.form_fields?.order_index || 0) - (b.form_fields?.order_index || 0)

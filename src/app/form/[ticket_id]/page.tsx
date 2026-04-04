@@ -202,7 +202,7 @@ export default function FormResponsePage({ params }: { params: Promise<{ ticket_
         if (!formResponse) return;
         setSubmitting(true);
         try {
-            const updates = formFields
+            const updatesWithLabel = formFields
                 .filter(f => f.type !== 'section_header')
                 .map(field => ({
                     response_id: formResponse.id,
@@ -214,7 +214,15 @@ export default function FormResponsePage({ params }: { params: Promise<{ ticket_
                 }));
 
             await supabase.from('form_response_answers').delete().eq('response_id', formResponse.id);
-            const { error: insertErr } = await supabase.from('form_response_answers').insert(updates);
+
+            // Try saving with field_label (requires SQL migration).
+            // If column doesn't exist yet, fall back to saving without it.
+            let { error: insertErr } = await supabase.from('form_response_answers').insert(updatesWithLabel);
+            if (insertErr) {
+                const updatesBasic = updatesWithLabel.map(({ field_label, ...rest }) => rest);
+                const { error: fallbackErr } = await supabase.from('form_response_answers').insert(updatesBasic);
+                insertErr = fallbackErr;
+            }
             if (insertErr) { setError('Erro ao salvar respostas'); setSubmitting(false); return; }
             await supabase.from('form_responses').update({ status: 'completed' }).eq('id', formResponse.id);
             setSubmitted(true);
