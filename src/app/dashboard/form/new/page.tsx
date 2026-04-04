@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, FormEvent, useEffect } from 'react';
+import { useState, FormEvent, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/context/AuthContext';
@@ -59,7 +59,7 @@ function addShirtFields(fields: FormField[], isCouple: boolean): FormField[] {
     return [...base, makeShirtField('Tamanho da Camisa', startIndex, SHIRT_SIZES_MEN)];
 }
 
-export default function NewFormPage() {
+function NewFormPageContent() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const { user } = useAuth();
@@ -847,6 +847,14 @@ export default function NewFormPage() {
                 </div>
             </form>
         </div>
+    );
+}
+
+export default function NewFormPage() {
+    return (
+        <Suspense fallback={<div style={{ padding: '2rem', textAlign: 'center' }}>Carregando...</div>}>
+            <NewFormPageContent />
+        </Suspense>
     );
 }
 
