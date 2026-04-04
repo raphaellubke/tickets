@@ -358,8 +358,12 @@ function CheckoutPageContent() {
                     if (ticketError || !ticket) continue;
 
                     // Atomic capacity check — if at capacity, remove the ticket just created
-                    const { data: incremented } = await supabase.rpc('increment_quantity_sold', { p_ticket_type_id: item.ticket_type_id });
-                    if (!incremented) {
+                    const { data: incremented, error: incrementError } = await supabase.rpc('increment_quantity_sold', { p_ticket_type_id: item.ticket_type_id });
+                    if (incrementError) {
+                        // RPC error (function missing or DB error) — don't delete ticket, just log
+                        console.error('increment_quantity_sold error:', incrementError.message);
+                    } else if (incremented === false) {
+                        // Legitimately at capacity — undo the ticket
                         await supabase.from('tickets').delete().eq('id', ticket.id);
                         console.warn('Ticket oversell prevented for type:', item.ticket_type_id);
                         continue;

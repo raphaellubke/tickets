@@ -328,7 +328,9 @@ export default function EventDetails({ params }: { params: Promise<{ id: string 
     };
 
     const formatDate = (dateString: string) => {
-        const date = new Date(dateString);
+        // Parse as local date (YYYY-MM-DD) to avoid UTC offset shifting the day
+        const [y, m, d] = dateString.split('T')[0].split('-').map(Number);
+        const date = new Date(y, m - 1, d);
         const days = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
         const months = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
         
