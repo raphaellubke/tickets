@@ -15,6 +15,7 @@ interface Event {
     event_date: string;
     event_time: string;
     minPrice?: number;
+    isCouple?: boolean;
 }
 
 export default function EventList() {
@@ -57,19 +58,24 @@ export default function EventList() {
                 const eventsWithPrices = await Promise.all((eventsData || []).map(async (event) => {
                     const { data: ticketTypes } = await supabase
                         .from('event_ticket_types')
-                        .select('price')
+                        .select('price, is_couple')
                         .eq('event_id', event.id)
                         .eq('is_active', true)
                         .order('price', { ascending: true })
                         .limit(1);
 
-                    const minPrice = ticketTypes && ticketTypes.length > 0 
+                    const minPrice = ticketTypes && ticketTypes.length > 0
                         ? parseFloat(ticketTypes[0].price?.toString() || '0')
                         : 0;
+
+                    const isCouple = ticketTypes && ticketTypes.length > 0
+                        ? (ticketTypes[0].is_couple ?? false)
+                        : false;
 
                     return {
                         ...event,
                         minPrice,
+                        isCouple,
                     };
                 }));
 
@@ -167,6 +173,7 @@ export default function EventList() {
                                 date={date}
                                 time={time}
                                 price={formatPrice(event.minPrice || 0)}
+                                isCouple={event.isCouple}
                             />
                         );
                     })

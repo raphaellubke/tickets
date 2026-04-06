@@ -12,9 +12,10 @@ interface EventCardProps {
     date: string;
     time?: string;
     price: string;
+    isCouple?: boolean;
 }
 
-export default function EventCard({ id, image, tag, title, location, date, price }: EventCardProps) {
+export default function EventCard({ id, image, tag, title, location, date, price, isCouple }: EventCardProps) {
     return (
         <Link href={`/event/${id}`} className={styles.cardLink}>
             <article className={styles.card}>
@@ -34,7 +35,7 @@ export default function EventCard({ id, image, tag, title, location, date, price
                         </div>
                         <div className={styles.priceContainer}>
                             <span className={styles.price}>{price}</span>
-                            <span className={styles.perPerson}>por pessoa</span>
+                            <span className={styles.perPerson}>{isCouple ? 'por casal' : 'por pessoa'}</span>
                         </div>
                     </div>
                 </div>

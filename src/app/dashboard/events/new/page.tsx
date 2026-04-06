@@ -45,6 +45,7 @@ interface TicketType {
     startSale: string;
     endSale: string;
     isActive: boolean;
+    isCouple: boolean;
 }
 
 export default function NewEventPage() {
@@ -294,7 +295,8 @@ export default function NewEventPage() {
                         quantityAvailable: type.quantity_available?.toString() || '0',
                         startSale: type.start_sale ? new Date(type.start_sale).toISOString().slice(0, 16) : '',
                         endSale: type.end_sale ? new Date(type.end_sale).toISOString().slice(0, 16) : '',
-                        isActive: type.is_active ?? true
+                        isActive: type.is_active ?? true,
+                        isCouple: type.is_couple ?? false
                     }));
 
                     groupsWithTypes.push({
@@ -351,7 +353,8 @@ export default function NewEventPage() {
                     quantityAvailable: '0',
                     startSale: '',
                     endSale: '',
-                    isActive: true
+                    isActive: true,
+                    isCouple: false
                 };
                 return { ...group, ticketTypes: [...group.ticketTypes, newType] };
             }
@@ -605,7 +608,8 @@ export default function NewEventPage() {
                                 quantity_available: parseInt(type.quantityAvailable) || 0,
                                 start_sale: type.startSale ? new Date(type.startSale).toISOString() : null,
                                 end_sale: type.endSale ? new Date(type.endSale).toISOString() : null,
-                                is_active: type.isActive
+                                is_active: type.isActive,
+                                is_couple: type.isCouple
                             }]);
 
                         if (typeError) {
@@ -623,7 +627,8 @@ export default function NewEventPage() {
                                 quantity_available: parseInt(type.quantityAvailable) || 0,
                                 start_sale: type.startSale ? new Date(type.startSale).toISOString() : null,
                                 end_sale: type.endSale ? new Date(type.endSale).toISOString() : null,
-                                is_active: type.isActive
+                                is_active: type.isActive,
+                                is_couple: type.isCouple
                             })
                             .eq('id', type.id);
 
@@ -1148,7 +1153,7 @@ export default function NewEventPage() {
                                                                 </div>
                                                             </div>
 
-                                                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '0.75rem' }}>
+                                                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.75rem', marginBottom: '0.75rem' }}>
                                                                 <div>
                                                                     <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', marginBottom: '0.25rem', color: '#374151' }}>
                                                                         Quantidade Disponível
@@ -1181,6 +1186,20 @@ export default function NewEventPage() {
                                                                             style={{ cursor: 'pointer' }}
                                                                         />
                                                                         <span style={{ fontSize: '0.875rem' }}>Ativo para venda</span>
+                                                                    </label>
+                                                                </div>
+                                                                <div>
+                                                                    <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', marginBottom: '0.25rem', color: '#374151' }}>
+                                                                        Tipo
+                                                                    </label>
+                                                                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+                                                                        <input
+                                                                            type="checkbox"
+                                                                            checked={type.isCouple}
+                                                                            onChange={(e) => updateTicketType(group.id, type.id, 'isCouple', e.target.checked)}
+                                                                            style={{ cursor: 'pointer' }}
+                                                                        />
+                                                                        <span style={{ fontSize: '0.875rem' }}>Ingresso por casal</span>
                                                                     </label>
                                                                 </div>
                                                             </div>
