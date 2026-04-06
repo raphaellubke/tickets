@@ -824,6 +824,7 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
                             <p style={{ color: '#d1d5db' }}>Os compradores aparecerão aqui após o pagamento.</p>
                         </div>
                     ) : (
+                        <div className={styles.tableWrapper}>
                         <table className={styles.table}>
                             <thead>
                                 <tr>
@@ -939,6 +940,7 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
                                 ))}
                             </tbody>
                         </table>
+                        </div>
                     )}
                 </div>
 
