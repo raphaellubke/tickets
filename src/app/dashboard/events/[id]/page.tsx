@@ -917,7 +917,7 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
                                                 </span>
                                             )}
                                         </td>
-                                        <td style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                                        <td style={{ whiteSpace: 'nowrap' }}>
                                             <button
                                                 className={styles.actionBtn}
                                                 onClick={() => setModalOrder(p)}
@@ -928,6 +928,7 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
                                                 className={styles.deleteBtn}
                                                 onClick={() => setDeleteConfirmOrder(p)}
                                                 title="Excluir participante"
+                                                style={{ padding: '4px 7px' }}
                                             >
                                                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                                     <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/>

@@ -114,15 +114,15 @@
 /* Stats Row */
 .statsRow {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 16px;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 12px;
 }
 
 .statCard {
     background: #fff;
     border: 1px solid #e5e7eb;
     border-radius: 12px;
-    padding: 20px 24px;
+    padding: 16px 18px;
 }
 
 .statLabel {
@@ -132,7 +132,7 @@
 }
 
 .statValue {
-    font-size: 26px;
+    font-size: 22px;
     font-weight: 700;
     color: #111827;
     margin: 0;
