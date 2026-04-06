@@ -57,6 +57,7 @@ export default function FormResponsePage({ params }: { params: Promise<{ ticket_
     const [animKey, setAnimKey] = useState(0);
     const [fieldErrors, setFieldErrors] = useState<Set<string>>(new Set());
 
+    const DRAFT_KEY = `form_draft_${ticket_id}`;
     const MAX_FIELDS_PER_PAGE = 6;
 
     // Split fields into steps by section_header dividers, then auto-split large steps
@@ -95,6 +96,14 @@ export default function FormResponsePage({ params }: { params: Promise<{ ticket_
         return result;
     }, [formFields, formMeta]);
 
+    // Persist answers to localStorage whenever they change
+    useEffect(() => {
+        if (Object.keys(answers).length === 0 && Object.keys(coupleAnswers).length === 0) return;
+        try {
+            localStorage.setItem(DRAFT_KEY, JSON.stringify({ answers, coupleAnswers }));
+        } catch {}
+    }, [answers, coupleAnswers]);
+
     useEffect(() => {
         async function load() {
             if (!ticket_id) { setError('ID do ticket inválido'); setLoading(false); return; }
@@ -117,9 +126,10 @@ export default function FormResponsePage({ params }: { params: Promise<{ ticket_
                 setFormFields(fields || []);
 
                 const { data: existingAnswers } = await supabase.from('form_response_answers').select('*').eq('response_id', responseData.id);
+                const aMap: Record<string, string> = {};
+                const cMap: Record<string, { ele: string; ela: string }> = {};
+
                 if (existingAnswers) {
-                    const aMap: Record<string, string> = {};
-                    const cMap: Record<string, { ele: string; ela: string }> = {};
                     existingAnswers.forEach(a => {
                         if (form.is_couple) {
                             try {
@@ -129,9 +139,21 @@ export default function FormResponsePage({ params }: { params: Promise<{ ticket_
                         }
                         aMap[a.field_id] = a.value || '';
                     });
-                    setAnswers(aMap);
-                    if (form.is_couple) setCoupleAnswers(cMap);
                 }
+
+                // Restore draft from localStorage, giving priority to draft over empty DB values
+                try {
+                    const draft = localStorage.getItem(DRAFT_KEY);
+                    if (draft) {
+                        const { answers: draftA, coupleAnswers: draftC } = JSON.parse(draft);
+                        // Merge: draft overrides only fields not yet saved in DB
+                        if (draftA) Object.entries(draftA).forEach(([k, v]) => { if (!aMap[k]) aMap[k] = v as string; });
+                        if (draftC && form.is_couple) Object.entries(draftC).forEach(([k, v]) => { if (!cMap[k]) cMap[k] = v as { ele: string; ela: string }; });
+                    }
+                } catch {}
+
+                setAnswers(aMap);
+                if (form.is_couple) setCoupleAnswers(cMap);
             } catch (err: any) {
                 setError(err.message || 'Erro ao carregar formulário');
             } finally {
@@ -225,6 +247,7 @@ export default function FormResponsePage({ params }: { params: Promise<{ ticket_
             }
             if (insertErr) { setError('Erro ao salvar respostas'); setSubmitting(false); return; }
             await supabase.from('form_responses').update({ status: 'completed' }).eq('id', formResponse.id);
+            try { localStorage.removeItem(DRAFT_KEY); } catch {}
             setSubmitted(true);
             window.scrollTo({ top: 0, behavior: 'smooth' });
         } catch (err: any) {

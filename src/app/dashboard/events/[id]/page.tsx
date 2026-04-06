@@ -242,6 +242,12 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
     const [bulkEmailResult, setBulkEmailResult] = useState<string | null>(null);
     const [orgLogoBase64, setOrgLogoBase64] = useState<string | null>(null);
 
+    // CSV export modal state
+    const [csvModalOpen, setCsvModalOpen] = useState(false);
+    const [csvFields, setCsvFields] = useState<Array<{ id: string; label: string; type: string }>>([]);
+    const [csvSelectedFields, setCsvSelectedFields] = useState<Set<string>>(new Set());
+    const [csvFieldsLoading, setCsvFieldsLoading] = useState(false);
+
     // Waitlist state
     const [filterStatus, setFilterStatus] = useState('');
     const [filterPaymentStatus, setFilterPaymentStatus] = useState('');
@@ -343,6 +349,60 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
         } finally {
             setLoading(false);
         }
+    }
+
+    // CSV export modal
+    async function openCsvModal() {
+        setCsvModalOpen(true);
+        setCsvFieldsLoading(true);
+        try {
+            // Find the form linked to this event's tickets
+            const { data: tickets } = await supabase
+                .from('tickets')
+                .select('id')
+                .eq('event_id', eventId)
+                .in('status', ['active', 'used'])
+                .limit(1);
+
+            if (!tickets || tickets.length === 0) { setCsvFieldsLoading(false); return; }
+
+            const { data: response } = await supabase
+                .from('form_responses')
+                .select('form_id')
+                .eq('ticket_id', tickets[0].id)
+                .limit(1)
+                .maybeSingle();
+
+            if (!response?.form_id) { setCsvFieldsLoading(false); return; }
+
+            const { data: fields } = await supabase
+                .from('form_fields')
+                .select('id, label, type')
+                .eq('form_id', response.form_id)
+                .neq('type', 'section_header')
+                .neq('type', 'clause')
+                .order('order_index', { ascending: true });
+
+            setCsvFields(fields || []);
+            // Select all by default
+            setCsvSelectedFields(new Set((fields || []).map((f: any) => f.id)));
+        } finally {
+            setCsvFieldsLoading(false);
+        }
+    }
+
+    function downloadCsv() {
+        const fieldParam = csvSelectedFields.size > 0
+            ? Array.from(csvSelectedFields).join(',')
+            : 'all';
+        const url = `/api/responses-csv?eventId=${eventId}&fields=${fieldParam}`;
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = '';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setCsvModalOpen(false);
     }
 
     // Waitlist functions
@@ -552,6 +612,16 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
                             </div>
                         </div>
                         <div className={styles.headerActions}>
+                            <button
+                                onClick={openCsvModal}
+                                className={styles.editBtn}
+                                style={{ background: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe', cursor: 'pointer' }}
+                            >
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+                                </svg>
+                                CSV Respostas
+                            </button>
                             <a
                                 href={`/api/shirt-report?eventId=${event.id}`}
                                 download
@@ -911,6 +981,93 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
                     onClose={() => setModalOrder(null)}
                     onPrintPDF={handlePrintPDF}
                 />
+            )}
+
+            {/* CSV Export Modal */}
+            {csvModalOpen && (
+                <div
+                    style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
+                    onClick={(e) => { if (e.target === e.currentTarget) setCsvModalOpen(false); }}
+                >
+                    <div style={{ background: '#fff', borderRadius: 12, padding: 24, width: '100%', maxWidth: 480, maxHeight: '80vh', display: 'flex', flexDirection: 'column', gap: 16 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <h3 style={{ margin: 0, fontSize: 17, fontWeight: 700 }}>Exportar CSV de Respostas</h3>
+                            <button onClick={() => setCsvModalOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 20, color: '#6b7280', lineHeight: 1 }}>×</button>
+                        </div>
+
+                        <p style={{ margin: 0, fontSize: 13, color: '#6b7280' }}>
+                            O CSV sempre inclui: nome, e-mail, telefone, tipo de ingresso, código, pagamento e status do formulário.
+                            Selecione abaixo quais campos do formulário adicionar:
+                        </p>
+
+                        {csvFieldsLoading ? (
+                            <div style={{ textAlign: 'center', padding: '24px 0', color: '#6b7280', fontSize: 14 }}>Carregando campos...</div>
+                        ) : csvFields.length === 0 ? (
+                            <div style={{ textAlign: 'center', padding: '24px 0', color: '#6b7280', fontSize: 14 }}>
+                                Nenhum campo de formulário encontrado para este evento.
+                            </div>
+                        ) : (
+                            <>
+                                <div style={{ display: 'flex', gap: 8, marginBottom: -8 }}>
+                                    <button
+                                        onClick={() => setCsvSelectedFields(new Set(csvFields.map(f => f.id)))}
+                                        style={{ fontSize: 12, color: '#1d4ed8', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+                                    >
+                                        Selecionar todos
+                                    </button>
+                                    <span style={{ color: '#d1d5db' }}>|</span>
+                                    <button
+                                        onClick={() => setCsvSelectedFields(new Set())}
+                                        style={{ fontSize: 12, color: '#6b7280', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+                                    >
+                                        Limpar seleção
+                                    </button>
+                                </div>
+                                <div style={{ overflowY: 'auto', maxHeight: 300, display: 'flex', flexDirection: 'column', gap: 6, border: '1px solid #e5e7eb', borderRadius: 8, padding: 12 }}>
+                                    {csvFields.map(field => (
+                                        <label key={field.id} style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', fontSize: 14, color: '#111827', padding: '4px 0' }}>
+                                            <input
+                                                type="checkbox"
+                                                checked={csvSelectedFields.has(field.id)}
+                                                onChange={(e) => {
+                                                    setCsvSelectedFields(prev => {
+                                                        const next = new Set(prev);
+                                                        e.target.checked ? next.add(field.id) : next.delete(field.id);
+                                                        return next;
+                                                    });
+                                                }}
+                                                style={{ width: 16, height: 16, accentColor: '#1d4ed8', flexShrink: 0 }}
+                                            />
+                                            <span>{field.label}</span>
+                                            <span style={{ marginLeft: 'auto', fontSize: 11, color: '#9ca3af', background: '#f3f4f6', borderRadius: 4, padding: '1px 6px' }}>
+                                                {field.type}
+                                            </span>
+                                        </label>
+                                    ))}
+                                </div>
+                            </>
+                        )}
+
+                        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 4 }}>
+                            <button
+                                onClick={() => setCsvModalOpen(false)}
+                                style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer', fontSize: 14 }}
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                onClick={downloadCsv}
+                                disabled={csvFieldsLoading}
+                                style={{ padding: '8px 20px', borderRadius: 8, border: 'none', background: '#1d4ed8', color: '#fff', cursor: 'pointer', fontSize: 14, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}
+                            >
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+                                </svg>
+                                Baixar CSV
+                            </button>
+                        </div>
+                    </div>
+                </div>
             )}
         </>
     );
