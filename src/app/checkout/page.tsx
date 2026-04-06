@@ -417,6 +417,18 @@ function CheckoutPageContent() {
         return () => clearInterval(interval);
     }, [reservationExpiresAt]);
 
+    // When reservation expires, cancel the pending order if one was created
+    useEffect(() => {
+        if (!reservationExpired) return;
+        const oid = currentOrder?.id;
+        if (!oid) return;
+        fetch('/api/cancel-order', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ orderId: oid }),
+        }).catch(() => {});
+    }, [reservationExpired]);
+
     async function releaseReservation() {
         try {
             const sessionId = sessionStorage.getItem('reservationSessionId') || reservationSessionId;

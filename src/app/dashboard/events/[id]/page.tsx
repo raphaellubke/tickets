@@ -242,6 +242,11 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
     const [bulkEmailResult, setBulkEmailResult] = useState<string | null>(null);
     const [orgLogoBase64, setOrgLogoBase64] = useState<string | null>(null);
 
+    // In-cart & delete state
+    const [inCart, setInCart] = useState<{ sessions: number; quantity: number } | null>(null);
+    const [deleteConfirmOrder, setDeleteConfirmOrder] = useState<Participant | null>(null);
+    const [deleting, setDeleting] = useState(false);
+
     // CSV export modal state
     const [csvModalOpen, setCsvModalOpen] = useState(false);
     const [csvFields, setCsvFields] = useState<Array<{ id: string; label: string; type: string }>>([]);
@@ -258,7 +263,28 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
         if (user && eventId) fetchData();
     }, [user, eventId]);
 
+    // Poll in-cart reservations every 30s
+    useEffect(() => {
+        if (!user || !eventId) return;
+        async function fetchInCart() {
+            try {
+                const res = await fetch(`/api/event-reservations?eventId=${eventId}`);
+                if (res.ok) setInCart(await res.json());
+            } catch {}
+        }
+        fetchInCart();
+        const interval = setInterval(fetchInCart, 30_000);
+        return () => clearInterval(interval);
+    }, [user, eventId]);
+
     async function fetchData() {
+        // Cancel expired pending orders for this event before loading data
+        fetch('/api/cancel-order', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ eventId }),
+        }).catch(() => {});
+
         try {
             const { data: eventData } = await supabase
                 .from('events')
@@ -348,6 +374,28 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
             console.error('Error loading event detail:', err);
         } finally {
             setLoading(false);
+        }
+    }
+
+    // Delete participant
+    async function handleDeleteParticipant() {
+        if (!deleteConfirmOrder) return;
+        setDeleting(true);
+        try {
+            const res = await fetch('/api/delete-participant', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ orderId: deleteConfirmOrder.id }),
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || 'Erro ao excluir');
+            setParticipants(prev => prev.filter(p => p.id !== deleteConfirmOrder.id));
+            setSelectedIds(prev => { const n = new Set(prev); n.delete(deleteConfirmOrder.id); return n; });
+            setDeleteConfirmOrder(null);
+        } catch (err: any) {
+            alert('Erro ao excluir: ' + err.message);
+        } finally {
+            setDeleting(false);
         }
     }
 
@@ -669,6 +717,18 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
                         </p>
                         <p className={styles.statSub}>aguardando resposta</p>
                     </div>
+                    <div className={styles.statCard} style={{ borderLeft: '3px solid #f59e0b' }}>
+                        <p className={styles.statLabel} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                            <span style={{ width: 7, height: 7, borderRadius: '50%', background: inCart && inCart.quantity > 0 ? '#f59e0b' : '#d1d5db', display: 'inline-block' }} />
+                            No Carrinho
+                        </p>
+                        <p className={styles.statValue} style={{ color: inCart && inCart.quantity > 0 ? '#d97706' : 'inherit' }}>
+                            {inCart === null ? '…' : inCart.quantity}
+                        </p>
+                        <p className={styles.statSub}>
+                            {inCart === null ? 'carregando' : inCart.sessions === 0 ? 'nenhuma reserva ativa' : `${inCart.sessions} pessoa${inCart.sessions > 1 ? 's' : ''} no checkout`}
+                        </p>
+                    </div>
                 </div>
 
                 {/* ── Participants Section ── */}
@@ -857,12 +917,21 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
                                                 </span>
                                             )}
                                         </td>
-                                        <td>
+                                        <td style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                                             <button
                                                 className={styles.actionBtn}
                                                 onClick={() => setModalOrder(p)}
                                             >
                                                 Ver Detalhes
+                                            </button>
+                                            <button
+                                                className={styles.deleteBtn}
+                                                onClick={() => setDeleteConfirmOrder(p)}
+                                                title="Excluir participante"
+                                            >
+                                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                    <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/>
+                                                </svg>
                                             </button>
                                         </td>
                                     </tr>
@@ -981,6 +1050,60 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
                     onClose={() => setModalOrder(null)}
                     onPrintPDF={handlePrintPDF}
                 />
+            )}
+
+            {/* Delete Participant Confirmation Modal */}
+            {deleteConfirmOrder && (
+                <div
+                    style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
+                    onClick={(e) => { if (!deleting && e.target === e.currentTarget) setDeleteConfirmOrder(null); }}
+                >
+                    <div style={{ background: '#fff', borderRadius: 12, padding: 24, width: '100%', maxWidth: 400, display: 'flex', flexDirection: 'column', gap: 16 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                            <div style={{ width: 40, height: 40, borderRadius: '50%', background: '#fee2e2', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M9 6V4h6v2"/>
+                                </svg>
+                            </div>
+                            <div>
+                                <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#111827' }}>Excluir Participante</h3>
+                                <p style={{ margin: 0, fontSize: 13, color: '#6b7280' }}>Esta ação não pode ser desfeita</p>
+                            </div>
+                        </div>
+
+                        <div style={{ background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 8, padding: '12px 14px' }}>
+                            <p style={{ margin: 0, fontWeight: 600, fontSize: 14, color: '#111827' }}>{deleteConfirmOrder.participant_name}</p>
+                            <p style={{ margin: '2px 0 0', fontSize: 13, color: '#6b7280' }}>{deleteConfirmOrder.participant_email}</p>
+                            <p style={{ margin: '4px 0 0', fontSize: 12, color: '#9ca3af' }}>Pedido #{deleteConfirmOrder.order_number}</p>
+                        </div>
+
+                        <p style={{ margin: 0, fontSize: 13, color: '#374151' }}>
+                            Isso irá excluir permanentemente o pedido, ingressos, respostas de formulário e todos os dados relacionados.
+                            {deleteConfirmOrder.payment_status === 'paid' && (
+                                <span style={{ display: 'block', marginTop: 6, color: '#d97706', fontWeight: 600 }}>
+                                    ⚠ Este pedido foi pago — o estoque será restaurado automaticamente.
+                                </span>
+                            )}
+                        </p>
+
+                        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                            <button
+                                onClick={() => setDeleteConfirmOrder(null)}
+                                disabled={deleting}
+                                style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer', fontSize: 14 }}
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                onClick={handleDeleteParticipant}
+                                disabled={deleting}
+                                style={{ padding: '8px 20px', borderRadius: 8, border: 'none', background: '#dc2626', color: '#fff', cursor: deleting ? 'not-allowed' : 'pointer', fontSize: 14, fontWeight: 600, opacity: deleting ? 0.7 : 1 }}
+                            >
+                                {deleting ? 'Excluindo...' : 'Excluir Permanentemente'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
             )}
 
             {/* CSV Export Modal */}
