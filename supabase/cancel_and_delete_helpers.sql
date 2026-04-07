@@ -3,7 +3,8 @@
 -- Execute este script no Supabase SQL Editor
 -- ─────────────────────────────────────────────────────────────────────────────
 
--- 1. Cancela pedidos pendentes expirados (mais de 12 minutos sem pagamento)
+-- 1. Cancela pedidos pendentes expirados (entre 12 min e 4 horas sem pagamento)
+--    Não cancela pedidos que já têm um pagamento aprovado (segurança contra webhook atrasado)
 CREATE OR REPLACE FUNCTION public.cancel_expired_orders(p_event_id UUID DEFAULT NULL)
 RETURNS INT
 LANGUAGE plpgsql
@@ -13,11 +14,22 @@ AS $$
 DECLARE
     v_count INT;
 BEGIN
-    UPDATE public.orders
-    SET payment_status = 'cancelled'
-    WHERE payment_status = 'pending'
-      AND created_at < NOW() - INTERVAL '12 minutes'
-      AND (p_event_id IS NULL OR event_id = p_event_id);
+    UPDATE public.orders o
+    SET
+        payment_status = 'cancelled',
+        updated_at     = NOW()
+    WHERE o.payment_status = 'pending'
+      -- Expirado: mais de 12 minutos
+      AND o.created_at < NOW() - INTERVAL '12 minutes'
+      -- Janela máxima: 4 horas (evita cancelar pedidos antigos com webhook atrasado)
+      AND o.created_at > NOW() - INTERVAL '4 hours'
+      AND (p_event_id IS NULL OR o.event_id = p_event_id)
+      -- Não cancela se já tem pagamento aprovado no MP
+      AND NOT EXISTS (
+          SELECT 1 FROM public.payments p
+          WHERE p.order_id = o.id
+            AND p.status = 'paid'
+      );
 
     GET DIAGNOSTICS v_count = ROW_COUNT;
     RETURN v_count;
