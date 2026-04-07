@@ -32,18 +32,46 @@ export async function POST(request: NextRequest) {
         }
 
         if (eventId) {
-            // Cancel pending orders older than 12 min but newer than 4 hours
-            // (orders older than 4h may have legitimate delayed webhooks — don't touch them)
+            // Find pending orders older than 12 min but newer than 4 hours
+            const cutoffOld = new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString();
+            const cutoffNew = new Date(Date.now() - 12 * 60 * 1000).toISOString();
+
+            const { data: candidates } = await supabaseAdmin
+                .from('orders')
+                .select('id')
+                .eq('event_id', eventId)
+                .eq('payment_status', 'pending')
+                .lt('created_at', cutoffNew)
+                .gt('created_at', cutoffOld);
+
+            if (!candidates || candidates.length === 0) {
+                return NextResponse.json({ success: true, cancelled: 0 });
+            }
+
+            const candidateIds = candidates.map((o: any) => o.id);
+
+            // Safety: exclude any order that has a paid payment record
+            // (webhook may have been delayed — don't cancel a real payment)
+            const { data: paidPayments } = await supabaseAdmin
+                .from('payments')
+                .select('order_id')
+                .in('order_id', candidateIds)
+                .eq('status', 'paid');
+
+            const paidOrderIds = new Set((paidPayments || []).map((p: any) => p.order_id));
+            const safeToCancel = candidateIds.filter((id: string) => !paidOrderIds.has(id));
+
+            if (safeToCancel.length === 0) {
+                return NextResponse.json({ success: true, cancelled: 0 });
+            }
+
             const { error } = await supabaseAdmin
                 .from('orders')
                 .update({ payment_status: 'cancelled' })
-                .eq('event_id', eventId)
-                .eq('payment_status', 'pending')
-                .lt('created_at', new Date(Date.now() - 12 * 60 * 1000).toISOString())
-                .gt('created_at', new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString());
+                .in('id', safeToCancel);
 
             if (error) throw error;
-            return NextResponse.json({ success: true });
+            return NextResponse.json({ success: true, cancelled: safeToCancel.length });
         }
 
         return NextResponse.json({ error: 'orderId or eventId required' }, { status: 400 });

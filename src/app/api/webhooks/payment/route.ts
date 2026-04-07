@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { createClient } from '@supabase/supabase-js';
 import { sendPaymentConfirmationEmail } from '@/lib/sendEmail';
+
+const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+);
 
 export async function POST(request: NextRequest) {
     // Validate webhook secret to prevent unauthorized calls
@@ -14,7 +19,6 @@ export async function POST(request: NextRequest) {
 
     try {
         const body = await request.json();
-        const supabase = await createClient();
 
         // Extract payment information from webhook
         const { payment_id, status, provider_payment_id } = body;
@@ -52,7 +56,7 @@ export async function POST(request: NextRequest) {
 
         // If payment is approved, process the order
         if (status === 'paid' && payment) {
-            await processApprovedPayment(payment.orders.id, supabase);
+            await processApprovedPayment(payment.orders.id);
         }
 
         return NextResponse.json({ success: true });
@@ -65,7 +69,7 @@ export async function POST(request: NextRequest) {
     }
 }
 
-async function processApprovedPayment(orderId: string, supabase: any) {
+async function processApprovedPayment(orderId: string) {
     try {
         // 1. Update order status — only if still pending (idempotency guard)
         const { data: updatedOrders } = await supabase
