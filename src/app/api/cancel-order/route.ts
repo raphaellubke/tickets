@@ -32,12 +32,18 @@ export async function POST(request: NextRequest) {
         }
 
         if (eventId) {
-            // Cancel all expired pending orders for an event (pending > 12 min)
-            const { data, error } = await supabaseAdmin.rpc('cancel_expired_orders', {
-                p_event_id: eventId,
-            });
+            // Cancel pending orders older than 12 min but newer than 4 hours
+            // (orders older than 4h may have legitimate delayed webhooks — don't touch them)
+            const { error } = await supabaseAdmin
+                .from('orders')
+                .update({ payment_status: 'cancelled' })
+                .eq('event_id', eventId)
+                .eq('payment_status', 'pending')
+                .lt('created_at', new Date(Date.now() - 12 * 60 * 1000).toISOString())
+                .gt('created_at', new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString());
+
             if (error) throw error;
-            return NextResponse.json({ success: true, cancelled: data ?? 0 });
+            return NextResponse.json({ success: true });
         }
 
         return NextResponse.json({ error: 'orderId or eventId required' }, { status: 400 });

@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { createClient } from '@supabase/supabase-js';
 import { sendPaymentConfirmationEmail } from '@/lib/sendEmail';
+
+// Webhook runs without user session — must use service role to bypass RLS
+const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+);
 
 // MercadoPago sends a GET request first to verify the endpoint
 export async function GET() {
@@ -45,8 +51,6 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ ok: true });
         }
 
-        const supabase = await createClient();
-
         // external_reference is the order_number (e.g. ORD-...) — resolve to UUID
         const { data: orderRow } = await supabase
             .from('orders')
@@ -73,7 +77,7 @@ export async function POST(request: NextRequest) {
             .eq('status', 'pending');
 
         // Process the order (idempotent — skips if already processed)
-        await processApprovedPayment(orderId, supabase);
+        await processApprovedPayment(orderId);
 
         return NextResponse.json({ ok: true });
     } catch (err: any) {
@@ -83,7 +87,7 @@ export async function POST(request: NextRequest) {
     }
 }
 
-async function processApprovedPayment(orderId: string, supabase: any) {
+async function processApprovedPayment(orderId: string) {
     // Idempotency: only process if still pending
     const { data: updatedOrders } = await supabase
         .from('orders')
